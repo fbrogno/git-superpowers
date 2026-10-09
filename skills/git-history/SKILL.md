@@ -1,6 +1,6 @@
 ---
 name: git-history
-description: Use when the user asks who changed something and why, or how a file, function or lines evolved — "wer hat das geändert", "warum sieht das so aus", "who changed this", "git blame", "Historie von dieser Datei", "wann wurde das eingeführt". Read-only investigation of past changes.
+description: Use when the user asks who changed something and why, or how a file, function or lines evolved — "wer hat das geändert", "warum sieht das so aus", "who changed this", "git blame", "Historie von dieser Datei", "wann wurde das eingeführt". Read-only investigation of past changes. Not for finding which commit broke behavior (bisect).
 ---
 
 # Git History

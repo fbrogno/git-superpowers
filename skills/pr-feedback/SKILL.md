@@ -22,9 +22,9 @@ Review feedback is a set of claims to verify, not orders to execute. Understand 
 gh pr view --json number,reviewDecision,reviews,comments   # current branch's PR; add <n> for another
 OWNER=$(gh repo view --json owner --jq .owner.login); REPO=$(gh repo view --json name --jq .name)
 gh api "repos/$OWNER/$REPO/pulls/<n>/comments" --paginate   # inline comments (id, path, line, body)
-gh api graphql -f query='
-query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
-  reviewThreads(first:100){nodes{id isResolved isOutdated path line
+gh api graphql --paginate -f query='
+query($o:String!,$r:String!,$n:Int!,$endCursor:String){repository(owner:$o,name:$r){pullRequest(number:$n){
+  reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line
     comments(first:20){nodes{databaseId author{login} body}}}}}}}' \
   -f o="$OWNER" -f r="$REPO" -F n=<n> \
   --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved|not)'
@@ -49,7 +49,9 @@ Show the user the classification table. Clarify all unclear items BEFORE impleme
 
 Order: blocking issues (bugs, security, breakage) → simple fixes → complex refactors. After each fix run the relevant tests; one logical fix per commit (`git-superpowers:smart-commit`), so each reply can point to a commit SHA.
 
-### 4. Reply in the thread
+### 4. Push first, then reply
+
+Run `git-superpowers:safe-push` before replying, so every reply can cite a SHA that exists on the remote (`git rev-parse --short HEAD`).
 
 ```bash
 gh api -X POST "repos/$OWNER/$REPO/pulls/<n>/comments/<comment-id>/replies" -f body="Fixed in abc1234 — null case now returns early."
@@ -58,7 +60,7 @@ gh pr comment <n> --body "..."    # only for top-level conversation comments
 
 State the fix or the reasoning, nothing more. No "You're absolutely right!", no thanks-spam, no apologies. For disagreements: facts, the code location, and an offer to change if the reviewer sees a case you missed.
 
-### 5. Resolve only what is fixed
+### 5. Resolve only what is fixed (after the push and the reply)
 
 ```bash
 gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -f id="<thread-id>"
@@ -66,9 +68,7 @@ gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$
 
 Leave disagreements and open questions unresolved — the reviewer closes them.
 
-### 6. Push and re-request review
-
-Run `git-superpowers:safe-push`, then:
+### 6. Re-request review
 
 ```bash
 gh pr edit <n> --add-reviewer <login>    # re-requests review from someone who already reviewed
@@ -91,4 +91,4 @@ gh pr edit <n> --add-reviewer <login>    # re-requests review from someone who a
 - Replying with agreement phrases instead of the fix and its commit.
 - Adding features a reviewer hinted at without checking that anything uses them.
 - Forgetting the re-request, so the reviewer never learns the PR changed.
-- Missing the 100-item limit: paginate if a PR has more threads.
+- Missing the 100-item limit: the query above paginates with `--paginate` and `$endCursor`; keep both.

@@ -1,6 +1,6 @@
 ---
 name: worktree
-description: Use when the user wants a second branch checked out at the same time — "parallel arbeiten", "zweiter branch gleichzeitig", "worktree", "ohne stash wechseln", "work on two branches", "separate checkout". Not for stashing (git-superpowers:stash) or emergency fixes that can stash instead (git-superpowers:hotfix).
+description: Use when the user wants a second branch checked out at the same time — "parallel arbeiten", "zweiter branch gleichzeitig", "worktree", "ohne stash wechseln", "work on two branches", "separate checkout". Not for stashing (git-superpowers:stash) or emergency production fixes (git-superpowers:hotfix).
 ---
 
 # Worktree
@@ -47,18 +47,18 @@ git worktree add -b <new-branch> ../<repo>-<slug> origin/<BASE> # new branch fro
 git worktree add --detach ../<repo>-<slug> <rev>                # throwaway inspection
 ```
 
-BASE detection: see Branch Detection in `references/git-safety.md`. A branch can be checked out in only one worktree; git refuses a second. Remember to install dependencies in the new directory (node_modules are not shared).
+BASE detection: see `references/common-snippets.md#base-branch`. A branch can be checked out in only one worktree; git refuses a second. Remember to install dependencies in the new directory (node_modules are not shared).
 
 ### 4. Remove (only ours, only clean)
 
 ```bash
 git -C <wt> status --short            # show it
-git -C <wt> log --oneline @{u}..      # unpushed commits?
+git -C <wt> log --oneline HEAD --not --remotes   # commits on no remote (works detached / without upstream)
 git worktree remove <wt>
 git worktree prune                     # clear records of deleted directories
 ```
 
-Dirty or unpushed: show the output and ask. Never `--force` on a worktree the user made themselves. Deleting the branch afterwards is a separate decision (`git branch -d`).
+Dirty: show the output and ask. If the log output is non-empty the worktree holds unpushed commits: never remove it without explicit confirmation, and first offer to create a branch (`git -C <wt> branch <name>`) or push. Never `--force` on a worktree the user made themselves. Deleting the branch afterwards is a separate decision (`git branch -d`).
 
 ## Quick Reference
 

@@ -28,16 +28,17 @@ More than 5 repos: spawn `git-superpowers:repo-scanner`. Otherwise fetch in para
 ```bash
 for path in <repos>; do git -C "$path" fetch origin --quiet 2>/dev/null & done; wait
 for path in <repos>; do
-  name=$(basename "$path"); branch=$(git -C "$path" branch --show-current 2>/dev/null || echo detached)
+  name=$(basename "$path"); branch=$(git -C "$path" branch --show-current 2>/dev/null); [ -n "$branch" ] || branch="detached@$(git -C "$path" rev-parse --short HEAD 2>/dev/null)"
   base=$(git -C "$path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@.*/@@'); [ -z "$base" ] && base=main
   behind=$(git -C "$path" rev-list --count HEAD..origin/$base 2>/dev/null || echo "?")
   ahead=$(git -C "$path" rev-list --count origin/$base..HEAD 2>/dev/null || echo "?")
   changes=$(git -C "$path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
   last=$(git -C "$path" log -1 --format='%cr' 2>/dev/null || echo "no commits")
-  echo "$name|$branch|$behind|$ahead|$changes|$last|$(git -C "$path" remote get-url origin 2>/dev/null || echo 'no remote')"
+  remote=$(git -C "$path" remote get-url origin 2>/dev/null | sed -E 's#//[^/@]+@#//#'); [ -n "$remote" ] || remote="no remote"
+  echo "$name|$branch|$behind|$ahead|$changes|$last|$remote"
 done
 ```
-Edge cases: no remote shows "no remote" instead of numbers; detached HEAD shows the hash; fetch failure shows last known state with "(offline)".
+Edge cases: no remote shows "no remote" instead of numbers; detached HEAD shows `detached@<hash>`; credentials in remote URLs are stripped; fetch failure shows last known state with "(offline)".
 
 ### 3. Dashboard
 Table: Repo, Branch, Behind, Ahead, Changes, Last Commit. ⚠️ behind, ✓ current; problem repos first; summary line of repos needing attention. About 2 lines per repo, no diffs.

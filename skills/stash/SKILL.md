@@ -23,7 +23,7 @@ NEVER run `git stash clear` or `git stash drop` without first showing the stash 
 ### List and find
 
 ```bash
-git stash list --date=relative          # stash@{n}: On <branch>: <message> (age)
+git stash list --format='%gd  %cr  %gs'  # stash@{n}  age  message
 git stash list | grep -i "<keyword>"    # find by message
 git stash show -p --include-untracked stash@{n}   # full content (git >= 2.32); older: omit the flag
 git stash show --stat stash@{n}
@@ -49,7 +49,7 @@ git stash drop stash@{n}     # only after showing contents and confirmation
 
 ### Conflicts on apply
 
-The stash is untouched. Resolve the markers in the working tree (see `references/conflict-resolution.md`), or abandon with `git checkout -- .` and `git clean` only after the user confirms what would be lost. Alternative that never conflicts: `git stash branch <new-branch> stash@{n}` creates a branch at the stash's base commit, applies it, and drops the stash on success.
+The stash is untouched. Resolve the markers in the working tree (see `references/conflict-resolution.md`), or abandon with `git reset --merge` (keeps unrelated unstaged local changes, the stash stays untouched; staged ones are lost, so check `git diff --cached` first). Alternative that never conflicts: `git stash branch <new-branch> stash@{n}` creates a branch at the stash's base commit, applies it, and drops the stash on success.
 
 ### Recover a dropped or cleared stash
 
@@ -71,7 +71,7 @@ Show each candidate with age and contents, ask per stash (or per explicit list),
 | Goal | Command |
 |---|---|
 | Save | `git stash push -u -m "msg"` |
-| List | `git stash list --date=relative` |
+| List | `git stash list --format='%gd  %cr  %gs'` |
 | Inspect | `git stash show -p --include-untracked stash@{n}` |
 | Apply | `git stash apply stash@{n}` |
 | To branch | `git stash branch <name> stash@{n}` |

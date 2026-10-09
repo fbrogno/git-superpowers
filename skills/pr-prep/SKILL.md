@@ -28,7 +28,7 @@ gh pr list --head "$BRANCH" --state open --json number,title,url,reviewDecision,
 ```
 Exists: update mode. Offer push new commits, `gh pr edit` title/body, mark ready, status only, and `gh pr comment` summarizing changes since the last review. Skip creation below.
 
-**Merging** (only when the user asks "PR mergen"): fresh `gh pr checks` and `gh pr view --json mergeable,reviewDecision` first; ask which method (`--squash`, `--rebase`, `--merge`) per repo convention (`references/git-safety.md#workflow-conventions`); then `gh pr merge <n> <method>`. Never `--admin` to bypass failing checks.
+**Merging** (only when the user asks "PR mergen"): hard gate from fresh output of `gh pr checks <n>` and `gh pr view <n> --json mergeable,reviewDecision,statusCheckRollup`. Stop if any check is failing or pending, `mergeable != MERGEABLE`, or `reviewDecision == CHANGES_REQUESTED`. Otherwise show PR, method (`--squash`, `--rebase`, `--merge` per repo convention, `references/git-safety.md#workflow-conventions`) and check results, wait for an explicit yes, then `gh pr merge <n> --<merge|squash|rebase>`; ask whether to add `--delete-branch`. Never `--admin` to bypass failing checks.
 
 ### 3. Status and audit
 ```bash

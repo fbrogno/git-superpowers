@@ -1,6 +1,6 @@
 ---
 name: git-undo
-description: Use when the user wants to undo or recover something in git — revert a commit, "mach rückgängig", "falscher Branch", pushed to the wrong branch, "letzten Commit ändern" (amend), squash the last commits, restore a deleted or overwritten file, escape a bad rebase, discard all local changes, "alles kaputt gemacht". Not for splitting a commit (commit-split).
+description: Use when the user wants to undo or recover something in git — revert a commit, "mach rückgängig", "falscher Branch", pushed to the wrong branch, "letzten Commit ändern" (amend), squash the last commits, restore a deleted or overwritten file, escape a bad rebase, discard all local changes, "alles kaputt gemacht". Not for splitting a commit (commit-split) or stashes (stash).
 ---
 
 # Git Undo
@@ -39,7 +39,7 @@ Prefer `git revert` for pushed commits and `git reset --soft` for unpushed ones.
 ```bash
 git log --oneline -3 && git reset --soft HEAD~1
 ```
-Changes stay staged for recommit. This also covers "letzten Commit ändern" and squashing the last N commits (`git reset --soft HEAD~N`, then recommit). `git commit --amend` is acceptable only for an unpushed commit, after confirmation.
+Changes stay staged for recommit. This also covers "letzten Commit ändern" and squashing the last N commits (`git reset --soft HEAD~N`, then recommit) only if `git log origin/<branch>..HEAD` lists all N commits; otherwise it is pushed history: revert, or the force-push rules in scenario 4. `git commit --amend` is acceptable only for an unpushed commit, after confirmation.
 
 **2. Undo last commit AND discard changes** (destructive)
 Require a clean tree first (`git status --porcelain` empty); if dirty, offer `git stash push -u -m "git-undo backup $(date +%Y-%m-%d-%H%M)"` or a commit. Show `git diff HEAD~1..HEAD --stat`. The commit stays in the reflog; uncommitted work would not. Only on typed `yes`: `git reset --hard HEAD~1`.
@@ -67,7 +67,7 @@ git checkout <hash> -- <file>                  # restores and stages
 ```
 
 **6. Bad rebase**
-`git reflog | head -20`, find the entry just before the rebase started, show `git diff <ref>..HEAD --stat`, confirm, clean tree required (else backup stash), then `git reset --hard <ref>`. Offer `/smart-sync` to redo the rebase with guidance.
+If the rebase is still in progress (`git status` says so), run `git rebase --abort` first. Otherwise `git reflog | head -20`, find the entry just before the rebase started, show `git diff <ref>..HEAD --stat`, confirm, clean tree required (else backup stash), then `git reset --hard <ref>`. Offer `/smart-sync` to redo the rebase with guidance.
 
 **7. Discard ALL uncommitted changes** (irreversible)
 Show `git status` and `git diff --stat`, list untracked files that will vanish. Offer the backup stash (`-u`) first. Only on `yes`: `git reset --hard HEAD && git clean -fd` (skip both if the stash already cleaned the tree). Run `git status` afterwards.

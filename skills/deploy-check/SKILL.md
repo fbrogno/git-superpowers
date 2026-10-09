@@ -30,9 +30,9 @@ Nothing: "No deploy configs tracked", stop. Else list the surface and which file
 **3a. Other repos** (the common case). Local clones: for each discovered repo, read compose files from the default branch (`git -C "$repo" show "origin/HEAD:$f"`) and grep port mappings (`^\s*-?\s*"?([0-9.]+:)?[0-9]{2,5}:[0-9]+"?\s*$|published:\s*[0-9]+`). Uncloned org repos via gh (404s are normal; `--limit 1000`):
 ```bash
 for r in $(gh repo list <org> --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner'); do
-  for f in $(gh api "repos/$r/git/trees/HEAD?recursive=1" --jq '.tree[].path' 2>/dev/null | grep -E '(^|/)(docker-)?compose[^/]*\.ya?ml$'); do
+  for f in $(gh api "repos/$r/git/trees/HEAD?recursive=1" --jq '.tree[].path' 2>/dev/null | grep -iE '(^|/)(docker-)?compose[^/]*\.ya?ml$'); do
     gh api "repos/$r/contents/$f" --jq .content 2>/dev/null | base64 -d 2>/dev/null | grep -hE '"?([0-9.]+:)?[0-9]{2,5}:[0-9]+"?' | sed "s|^|$r/$f: |"
-  done
+  done   # tree API truncates above ~100k entries: for such monorepos say the scan may be incomplete
 done
 ```
 Build the port-to-repo inventory and report every port this repo claims that another claims. `.claude-git.yml` `port_registry: <path>` is authoritative if set; offer to append this repo's claim.

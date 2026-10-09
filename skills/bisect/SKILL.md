@@ -24,7 +24,7 @@ Binary search over history finds the first bad commit in about log2(n) steps. Th
 
 ### 2. Write the test script
 
-Put it OUTSIDE the repo (e.g. the session scratch dir) so checkouts do not remove it. Exit codes: `0` good, `1`-`124` bad, `125` skip (cannot test this commit), `126`+ aborts the bisect.
+Put it OUTSIDE the repo (e.g. the session scratch dir) so checkouts do not remove it. Exit codes: `0` good, `125` skip (cannot test this commit), `1`-`127` except 125 bad, `128`+ aborts the bisect. `chmod +x` the script: 126/127 (not executable / not found) would silently mark every commit bad.
 
 ```bash
 #!/usr/bin/env bash
@@ -32,7 +32,7 @@ npm ci --silent >/dev/null 2>&1 || exit 125     # build/install broke: skip, do 
 npm test -- path/to/failing.test.js              # exit code of the real check
 ```
 
-Test the symptom, not the whole suite. Run it once on `good` and once on `bad` to prove it separates them.
+Test the symptom, not the whole suite. Dry-run it on the known good and the known bad commit first (`git switch --detach <rev>` in the worktree, `./script.sh; echo $?`) to prove it separates them and returns neither 126 nor 127.
 
 ### 3. Run in a temporary worktree
 
@@ -54,7 +54,7 @@ Bisect state is per-worktree. Always run `git bisect reset`, also after errors o
 - **Flaky test**: run the script 3 times inside it and treat any failure as bad (or any pass as good, whichever the symptom needs); say so in the report.
 - **Does not build**: `exit 125`. Many skips make the result a range, not one commit; report it as such.
 - **Merge-heavy history**: `git bisect start --first-parent` narrows to the merge that brought the bug.
-- **Aborted run** (exit 126+): fix the script, `git bisect reset`, restart.
+- **Aborted run** (exit 128+): fix the script, `git bisect reset`, restart.
 
 ### 5. Report
 

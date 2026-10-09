@@ -1,6 +1,6 @@
 ---
 name: smart-sync
-description: Use when the user wants their branch brought up to date with the default branch by rebase — "sync", "rebase onto main", "pull from main", "neusten Stand ziehen", "branch aktualisieren" — or when a rebase or merge is stopped on conflicts ("merge conflicts lösen", "rebase conflict"). Not for pushing (safe-push) or just predicting conflicts (conflict-simulator).
+description: Use when the user wants their branch brought up to date with the default branch by rebase — "sync", "rebase onto main", "pull from main", "neusten Stand ziehen", "branch aktualisieren" — or when a rebase or merge is stopped on conflicts ("merge conflicts lösen", "rebase conflict"). Not for pushing (safe-push) or just predicting conflicts (conflict-simulator) (cherry-pick conflicts: cherry-pick).
 ---
 
 # Smart Sync
@@ -29,21 +29,22 @@ A rebase rewrites history. Check who else works on the branch, keep a way back (
 
 Preflight per `references/common-snippets.md#preflight`; detect `$BASE` per `#base-branch`. Never `git rebase -i` (needs stdin).
 
+0. **Rebase already in progress?** `git rev-parse -q --verify REBASE_HEAD` succeeds, or `$(git rev-parse --git-path rebase-merge)` / `$(git rev-parse --git-path rebase-apply)` exists: skip steps 1-4 (no new stash, no new rebase) and go straight to step 5.
 1. **Stash dirty tree**: `git status --porcelain`; if dirty `git stash push -u -m "smart-sync: auto-stash $(date +%Y-%m-%d-%H%M)"` and tell the user.
 2. **Analyze incoming**: `git log --oneline HEAD..origin/$BASE`. Empty: "Already up to date", pop stash, stop. Otherwise show commits, `git diff --stat HEAD...origin/$BASE` and the overlap (`#overlap`); overlap means conflicts are likely (`/conflict-simulator` previews them).
 3. **Merge commits on the branch?** `git log --merges origin/$BASE..HEAD --oneline`. If any: offer `--rebase-merges` (keeps structure), standard rebase (flattens, may re-conflict) or abort.
 4. **Rebase**: `git rebase origin/$BASE`. Clean: go to step 7.
-5. **Analyze conflicts** (`git diff --name-only --diff-filter=U`), read `references/conflict-resolution.md`; for >3 files spawn `git-superpowers:conflict-resolver`. Group by topic, per group state what each side changed and a recommendation. More than 5 files: suggest aborting and syncing more often.
+5. **Analyze conflicts** (`git diff --name-only --diff-filter=U`), read `references/conflict-resolution.md`; for >3 files spawn `git-superpowers:conflict-resolver` with `mode: rebase` (`mode: merge` in a merge). Group by topic, per group state what each side changed and a recommendation. More than 5 files: suggest aborting and syncing more often.
 6. **Resolve** per topic: keep mine `git checkout --theirs <f>`, take main `git checkout --ours <f>` (inverted during rebase!), combine (edit, remove markers), or show the conflict. Mixed files hunk by hunk. Then `git add <f>` and `git rebase --continue`; repeat for later commits. Offer `git rebase --abort` at any point. If `git rerere status` lists files, ask the user to verify the auto-resolutions.
 7. **Push** (history was rewritten): confirm, then `git push --force-with-lease --force-if-includes origin <branch>`. Protected or shared branch: stop (see `references/git-safety.md`). Lease rejected: `git fetch`, inspect `git log HEAD..origin/<branch>`, re-sync; do not force.
 8. **Cleanup**: `git stash pop` if stashed. Verify with fresh output: `git log --oneline <branch>..origin/$BASE` must be empty and `git status -sb` clean. Summarize (commits applied, conflicts resolved) and suggest `/smart-commit`, `/safe-push`.
 
 ## Conflicts in an in-progress merge
 
-If a `git merge` is already stopped on conflicts (`git status` says "You have unmerged paths", `.git/MERGE_HEAD` exists), resolve it here instead of rebasing: do not start a rebase or abort silently.
+If a `git merge` is already stopped on conflicts (`git status` says "You have unmerged paths", `git rev-parse -q --verify MERGE_HEAD` succeeds), resolve it here instead of rebasing: do not start a rebase or abort silently.
 
-- Same topic grouping and per-group choices as step 5/6, but in a merge `--ours` = your branch and `--theirs` = the incoming branch (not inverted).
-- Finish with `git add <files>` then `git commit` (default merge message; no `--no-edit` surprises, show it) — not `rebase --continue`.
+- Same topic grouping and per-group choices as step 5/6 (pass `mode: merge` to the conflict-resolver), but in a merge `--ours` = your branch and `--theirs` = the incoming branch (not inverted).
+- Finish with `git add <files>`, show the message with `cat "$(git rev-parse --git-path MERGE_MSG)"`, then `git commit --no-edit` (no editor) — not `rebase --continue`.
 - Escape hatch: `git merge --abort`. No force-push is needed afterwards (history was not rewritten); use `/safe-push`.
 
 ## Rules

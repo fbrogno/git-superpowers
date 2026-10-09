@@ -32,16 +32,17 @@ A broken release gets a follow-up release, not a rewritten tag.
 git fetch origin --tags
 # $BASE per references/common-snippets.md#base-branch
 git status --porcelain; git rev-list --count HEAD..origin/$BASE
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo none)
+LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)   # empty = no tag yet
+RANGE="${LAST_TAG:+$LAST_TAG..}HEAD"                     # no tag: full history
 ```
 Required, each failure stops with a concrete instruction: on `$BASE` (release branches only on request), clean tree, 0 behind, CI green on HEAD (`gh run list --commit "$(git rev-parse HEAD)" --json conclusion --jq '.[].conclusion'`, skip if no `gh` or no CI).
 
 ### 2. What's in it
 ```bash
-git log --oneline ${LAST_TAG}..HEAD      # "none": full history, suggest v0.1.0 or v1.0.0
-git log --format=%B ${LAST_TAG}..HEAD | grep -E '^BREAKING[ -]CHANGE|^[a-z]+(\(.+\))?!:'
+git log --oneline "$RANGE"               # no tag: suggest v0.1.0 or v1.0.0
+git log --format=%B "$RANGE" | grep -E '^BREAKING[ -]CHANGE|^[a-z]+(\(.+\))?!:'
 ```
-Group by Conventional-Commit type. `feat!:`/BREAKING footer = major, `feat:` = minor, otherwise patch. Not Conventional: read `git diff --stat ${LAST_TAG}..HEAD` and propose with reasoning. Pre-1.0: breaking = minor, rest = patch (say so). Show counts and the proposed version; let the user override.
+Group by Conventional-Commit type. `feat!:`/BREAKING footer = major, `feat:` = minor, otherwise patch. Not Conventional: read `git diff --stat "$LAST_TAG" HEAD` (no tag: `git log --stat`) and propose with reasoning. Pre-1.0: breaking = minor, rest = patch (say so). Show counts and the proposed version; let the user override.
 
 ### 3. Version files
 Find every place the version lives: `git grep -ln '"version"' -- '*.json' ':!*lock*.json'`, `setup.py`, `pyproject.toml`, `Cargo.toml`, plugin/marketplace manifests. Update them, add a CHANGELOG.md section if the repo keeps one, commit `chore(release): v<X.Y.Z>` per `references/common-snippets.md#commit-template`.
@@ -53,7 +54,7 @@ Direct push:
 ```bash
 git tag -a v<X.Y.Z> -m "v<X.Y.Z>" && git push origin "$BASE" --follow-tags
 ```
-Release PR: branch `release/v<X.Y.Z>` carries the bump commit (create it before step 3's commit; if the commit is already on `$BASE` locally, move local `$BASE` back with `git branch -f "$BASE" "origin/$BASE"` only when `git log origin/$BASE..$BASE` shows nothing but the bump), push, `gh pr create`, and after merge `git switch "$BASE" && git pull --ff-only`, then tag and `git push origin v<X.Y.Z>`.
+Release PR: branch `release/v<X.Y.Z>` carries the bump commit (create it before step 3's commit; if the commit is already on `$BASE` locally, in this order: (1) `git switch -c release/v<X.Y.Z>`, (2) then `git branch -f "$BASE" "origin/$BASE"`, only when `git log origin/$BASE..$BASE` shows nothing but the bump; `branch -f` cannot move the checked-out branch), push, `gh pr create`, and after merge `git switch "$BASE" && git pull --ff-only`, then tag and `git push origin v<X.Y.Z>`.
 
 Then `gh release create v<X.Y.Z> --title "v<X.Y.Z>" --notes "<notes>"` (`--draft` if wanted, `--generate-notes` if the user does not care). No `gh`: the pushed annotated tag is the release; offer notes to copy.
 

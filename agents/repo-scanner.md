@@ -44,14 +44,14 @@ Immediately after the fetch completes, collect all data in a single loop:
 ```bash
 for path in $REPOS; do
   name=$(basename "$path")
-  branch=$(git -C "$path" branch --show-current 2>/dev/null || echo "detached")
+  branch=$(git -C "$path" branch --show-current 2>/dev/null); [ -n "$branch" ] || branch="detached@$(git -C "$path" rev-parse --short HEAD 2>/dev/null)"
   default=$(git -C "$path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
   default=${default:-main}
   behind=$(git -C "$path" rev-list --count HEAD..origin/$default 2>/dev/null || echo "?")
   ahead=$(git -C "$path" rev-list --count origin/$default..HEAD 2>/dev/null || echo "?")
   changes=$(git -C "$path" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
   last=$(git -C "$path" log --oneline -1 --format='%cr' 2>/dev/null || echo "no commits")
-  remote=$(git -C "$path" remote get-url origin 2>/dev/null || echo "no remote")
+  remote=$(git -C "$path" remote get-url origin 2>/dev/null | sed -E 's#//[^/@]+@#//#'); [ -n "$remote" ] || remote="no remote"
   echo "$name|$branch|$behind|$ahead|$changes|$last|$remote"
 done
 ```

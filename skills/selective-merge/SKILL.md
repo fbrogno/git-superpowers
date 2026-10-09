@@ -27,14 +27,14 @@ git diff HEAD..origin/<branch> -- <file>
 Not on source: "Nothing to take", stop. Not local: it will be added as a new file. Empty diff: identical, stop. Show the diff readably.
 
 ### 3. Local changes check
-`git status -- <file>`. If modified or staged, show the local diff and warn they are in no commit and would be lost. Options: stash first (`git stash push -u -m "selective-merge: park work before taking <file>"`), commit first, take anyway, cancel. Wait for the choice.
+`git status -- <file>`. If modified or staged, show the local diff and warn they are in no commit and would be lost. Options: stash only this file (`git stash push -u -m "selective-merge: park <file>" -- <file>`), commit first, take anyway, cancel. Wait for the choice.
 
 ### 4. Strategy
 - **Replace**: `git restore --source=origin/<branch> --worktree -- <file>` (deliberately unstaged, unlike `git checkout <ref> -- <file>`).
 - **Merge parts**: show the diff hunk by hunk, ask "Take this change?" for each, apply only the chosen ones by editing the file, show the resulting content.
 
 ### 5. Verify
-`git diff HEAD -- <file>`, "Does this look right?". If stashed in step 3 offer `git stash pop`; on a conflict explain, resolve in the file, then `git stash drop`.
+`git diff HEAD -- <file>`, "Does this look right?". If stashed in step 3: for Replace the stash holds the old local version, so keep it until the user decides (`git stash show -p stash@{0} -- <file>` shows what was parked). To combine both, hand-merge from that diff, or commit the taken version first and then `git stash pop` (gives real conflict markers to resolve; a pop onto an uncommitted replaced file does not conflict, it refuses or overwrites). Drop the stash only after confirmation.
 
 ### 6. Hand back
 Tell the user the file is changed but uncommitted; suggest `git add <file>` and commit, or `/smart-commit`.

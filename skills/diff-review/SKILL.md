@@ -59,7 +59,7 @@ Flag only genuine issues, not hypotheticals.
 - Only when the inconsistency would cause a real bug or is jarring
 
 ### 4. Present findings
-Group by severity (🔴 CRITICAL, 🟡 WARNING, 🟢 SUGGESTION; only severities that occur). Each finding: number, `file:line`, the actual code, what is wrong and why, a concrete fix. End with counts. No issues: say so confidently ("No significant issues found. Ready to commit.").
+Group by severity (🔴 CRITICAL, 🟡 WARNING, 🟢 SUGGESTION; only severities that occur). Each finding: number, `file:line`, the actual code, what is wrong and why, a concrete fix. End with counts and the code-reviewer's `verdict` (or your own equivalent) as "Ready to merge: yes | no | with fixes". No issues: say so confidently ("No significant issues found. Ready to commit.").
 
 ### 5. Fix and verify
 Ask which to fix (numbers, all, skip). Read the file, apply, show the changed lines. Show the updated diff and flag any new problem a fix introduced.

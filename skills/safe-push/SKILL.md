@@ -53,7 +53,7 @@ git rev-list --objects origin/<branch>..HEAD | git cat-file --batch-check='%(obj
   | awk '$2=="blob" && $1>1048576 {printf "%.1f MB  %s\n",$1/1048576,$3}' | sort -rn
 ```
 Flag >1 MB; GitHub rejects >50 MB. Offer to remove accidental binaries (Git LFS if intended).
-6. **Deploy configs** (only if the diff touches compose/Dockerfile/k8s/`.service`/`.env*`/proxy configs): hardcoded host ports, `container_name:`, `:latest`, host-path volumes, committed `.env` values. **Gate, not warning** when this push triggers the FIRST deploy and a hardcoded host port is present: do not push until `/deploy-check` verified the port and the user confirmed explicitly; better offer the config fix first.
+6. **Deploy configs** (only if the diff touches compose/Dockerfile/k8s/`.service`/`.env*`/proxy configs): hardcoded host ports, `container_name:`, `:latest`, host-path volumes, committed `.env` values. **Gate, not warning** when this push triggers the FIRST deploy and a hardcoded host port is present: do not push until the user's confirmation names the verification ("port X checked free on target") — hand off to `/deploy-check` for the confirmed read-only `ss -tlnp` check; better offer the config fix first.
 
 ### 4. Report and fix
 All clear: "Safe Push Audit passed: N commits, M files. Push to origin/<branch>?" Otherwise list numbered findings (file:line, actual code) and ask which to fix (numbers, all, ignore).

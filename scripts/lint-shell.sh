@@ -58,7 +58,7 @@ echo "lint-shell: ${#files[@]} file(s)"
 
 for f in "${files[@]}"; do
   first=""; IFS= read -r first <"$f" || true
-  sh_bin=bash; [[ "$first" =~ [/[:space:]](sh|dash)([[:space:]]|$) ]] && sh_bin=sh
+  sh_bin=bash; [[ "$first" =~ [/[:space:]](sh|dash)([[:space:]]|$) ]] && sh_bin="sh"
   if ! out="$("$sh_bin" -n "$f" 2>&1)"; then
     echo "  x syntax: $f"; echo "$out" | sed 's/^/      /'; fail=1
   fi

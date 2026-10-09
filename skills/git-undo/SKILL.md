@@ -1,295 +1,79 @@
 ---
 name: git-undo
-description: Safe git recovery — undo commits, revert pushes, restore files, escape bad rebases. Triggers: undo, revert, "mach rückgängig", "falscher branch", "alles kaputt gemacht", "restore file", /git-undo.
+description: Use when the user wants to undo or recover something in git — revert a commit, "mach rückgängig", "falscher Branch", committed or pushed to the wrong branch, asks how to undo a commit, "letzten Commit ändern" (amend), squash the last commits, restore a deleted or overwritten file, escape a bad rebase, discard all local changes, "alles kaputt gemacht". Not for splitting a commit (commit-split) or stashes (stash).
 ---
 
 # Git Undo
 
-Diagnose what went wrong and recover safely. This skill always shows you exactly what will happen before doing anything destructive — and always suggests the least destructive option first.
+Diagnose what went wrong, then recover with the least destructive option that works.
 
-## Safety (always apply)
-- Always show what will happen before executing any recovery
-- Always confirm destructive operations with explicit user approval
-- For pushed commits: prefer `git revert` over history rewriting
-- For unpushed commits: prefer `git reset --soft` over `--hard`
-- `git reflog` is always the ultimate escape hatch
+## Iron Law
+
+```
+NO DESTRUCTIVE COMMAND WITHOUT A RECOVERY PATH AND EXPLICIT USER CONFIRMATION
+```
+
+Before any `reset --hard`, `clean`, `checkout -- <file>` or force push: show exactly what is lost, name the way back (reflog SHA, backup stash), get a "yes".
+
+## Red Flags
+
+| Thought | Reality |
+|---|---|
+| "The git-guard hook will catch anything bad" | It blocks patterns, not intent. A plain `reset --hard` passes and eats uncommitted work. |
+| "It's only my branch, force-push is fine" | Check `git log origin/<branch> --format=%ae \| sort -u` first. Teammates may have it. |
+| "Uncommitted changes are probably nothing" | Untracked and unstaged work is NOT in the reflog. Back it up (`stash -u`) or confirm. |
+| "I'll skip the preview, the user is in a hurry" | The preview is 2 lines. Data loss is forever. |
+| "reset is quicker than revert" | On pushed commits, revert is the only safe option. |
 
 ## Workflow
 
-### Step 1: Diagnose the Situation
+1. Show state: `git status`, `git log --oneline -5`. If unclear, ask which scenario below applies.
+2. Before acting, state: what will happen, what cannot be undone, how to undo the recovery itself.
+3. Confirm, execute, then verify with `git status` and `git log --oneline -5`.
 
-Ask the user what happened if it's not clear from context. Common scenarios:
+Prefer `git revert` for pushed commits and `git reset --soft` for unpushed ones. `git reflog` (~90 days) is the escape hatch; mention it after every recovery.
 
-```
-What went wrong? (describe in your own words, or pick a number)
+## Scenarios
 
-[1] I want to undo my last commit (but keep the file changes)
-[2] I want to undo my last commit AND discard the file changes
-[3] I accidentally pushed to the wrong branch
-[4] I need to revert a commit that's already pushed (shared with others)
-[5] I accidentally deleted or overwrote a file
-[6] My rebase went wrong and I want to go back
-[7] I want to discard ALL uncommitted changes
-```
-
-Also show the current state to give context:
-
+**1. Undo last commit, keep changes** (reversible)
 ```bash
-git status
-git log --oneline -5
+git log --oneline -3 && git reset --soft HEAD~1
 ```
+Changes stay staged for recommit. This also covers "letzten Commit ändern" and squashing the last N commits (`git reset --soft HEAD~N`, then recommit) only if `git log origin/<branch>..HEAD` lists all N commits; otherwise it is pushed history: revert, or the force-push rules in scenario 4. `git commit --amend` is acceptable only for an unpushed commit, after confirmation.
 
-### Step 2: Explain Before Acting
+**2. Undo last commit AND discard changes** (destructive)
+Require a clean tree first (`git status --porcelain` empty); if dirty, offer `git stash push -u -m "git-undo backup $(date +%Y-%m-%d-%H%M)"` or a commit. Show `git diff HEAD~1..HEAD --stat`. The commit stays in the reflog; uncommitted work would not. Only on typed `yes`: `git reset --hard HEAD~1`.
 
-Before running any recovery command, always show:
-- **What will happen** — in plain language
-- **What cannot be undone** — if the operation is irreversible
-- **The escape hatch** — how to undo the recovery itself if it goes wrong
-
-Then ask for confirmation. Never skip this for destructive operations.
-
----
-
-## Recovery Scenarios
-
-### Scenario 1: Undo Last Commit, Keep Changes
-
-The safest undo — moves HEAD (your current position in git history) back one commit but keeps all file changes in your working directory.
-
+**3. Revert a pushed commit** (safe for shared history)
 ```bash
-git log --oneline -3    # Show what will be undone
-git reset --soft HEAD~1
+git show <hash> --stat      # confirm it is the right commit
+git revert <hash> --no-edit && git push origin <branch>
 ```
 
-After: the commit disappears, but all changes remain staged. The user can edit them and recommit.
-
-Show before running:
-```
-This will undo:
-  abc1234 feat(amazon): add dashboard
-
-Your file changes WILL BE KEPT (staged, ready to recommit).
-This is reversible — you can redo the commit. Proceed? (y/n)
-```
-
-### Scenario 2: Undo Last Commit AND Discard Changes
-
-This is destructive — file changes are permanently lost.
-
+**4. Commits landed on the wrong branch**
 ```bash
-git log --oneline -3    # Show what will be lost
-git diff HEAD~1..HEAD --stat    # Show what files will be affected
+git log --oneline origin/<wrong>..HEAD    # the stray commits
+git branch <correct-branch>               # keep them on the right branch
 ```
+Push `<correct-branch>` if wanted. Then remove them from `<wrong>` (show the list, confirm):
+- Not pushed (the log above shows them): `git reset --hard origin/<wrong>` (stash first if tree is dirty).
+- Already pushed: if `<wrong>` is protected or shared (see `references/git-safety.md`), revert: `git revert <sha1> <sha2> --no-edit && git push`. Only on a private branch: `git reset --hard <last-good-sha>` then `git push --force-with-lease --force-if-includes`.
 
-Show before running:
-```
-WARNING: This will permanently discard:
-  abc1234 feat(amazon): add dashboard
-  → 5 files changed, 142 insertions
-
-The file changes CANNOT be recovered after this.
-Are you sure? Type 'yes' to confirm:
-```
-
-Only proceed on explicit `yes` confirmation:
+**5. Deleted or overwritten file**
 ```bash
-git reset --hard HEAD~1
+git log --oneline --all -- <file>              # or --diff-filter=D -- "**/*" if the name is unknown
+git show <hash>:<file>                         # preview, confirm
+git checkout <hash> -- <file>                  # restores and stages
 ```
 
-### Scenario 3: Revert a Pushed Commit
+**6. Bad rebase**
+If the rebase is still in progress (`git status` says so), run `git rebase --abort` first. Otherwise `git reflog | head -20`, find the entry just before the rebase started, show `git diff <ref>..HEAD --stat`, confirm, clean tree required (else backup stash), then `git reset --hard <ref>`. Offer `/smart-sync` to redo the rebase with guidance.
 
-When others may already have pulled the commit, `git revert` is the safe path — it creates a new commit that undoes the changes. This is safer than deleting the commit because it doesn't rewrite history that others already have.
-
-```bash
-git log --oneline -10   # Help user identify the commit
-```
-
-Ask which commit to revert. Then:
-
-```bash
-git show <hash> --stat  # Show what the commit did
-```
-
-Confirm:
-```
-This will create a new commit that UNDOES:
-  abc1234 fix(auth): changed redirect logic
-
-Other people's history stays intact — no force push needed.
-Proceed? (y/n)
-```
-
-```bash
-git revert <hash> --no-edit
-git push origin <branch>
-```
-
-### Scenario 4: Pushed to the Wrong Branch
-
-Show the situation first:
-
-```bash
-git log --oneline origin/main..HEAD    # commits on wrong branch
-git branch --show-current              # current (wrong) branch
-```
-
-Ask what the correct branch should be. Then:
-
-```bash
-# Step 1: Create correct branch from current position
-git checkout -b <correct-branch>
-
-# Step 2: Push to correct branch
-git push origin <correct-branch>
-
-# Step 3: Switch back to wrong branch and remove the commits
-git checkout <wrong-branch>
-```
-
-Show before Step 3:
-```
-Now we need to remove those commits from <wrong-branch>.
-
-Commits that will be removed from <wrong-branch>:
-  abc1234 feat(amazon): add dashboard
-  def5678 fix(amazon): typo
-
-They will still exist on <correct-branch>. Proceed? (y/n)
-```
-
-How to remove them depends on whether the mistake was already pushed — check first:
-
-```bash
-git log --oneline origin/<wrong-branch>..HEAD
-```
-
-**Mistake NOT pushed yet** (the commits appear in the output): the remote is still clean — just reset the local branch to it. No force push needed:
-
-```bash
-git reset --hard origin/<wrong-branch>
-```
-
-**Mistake already pushed** (output is empty — remote has the bad commits too): resetting to origin would be a no-op. Reset to the last good commit and rewrite the remote:
-
-```bash
-git log --oneline -10                      # identify the last good commit
-git reset --hard <last-good-sha>
-git push --force-with-lease --force-if-includes origin <wrong-branch>
-```
-
-**Exception — wrong branch is protected or shared** (main/master/develop, or a branch others work on — see Protected Branches in `references/git-safety.md`): never force-push it. Revert instead, which is safe for everyone who already pulled:
-
-```bash
-git revert <bad-sha-1> <bad-sha-2> --no-edit
-git push origin <wrong-branch>
-```
-
-Explain the difference: `--force-with-lease --force-if-includes` fails if someone else pushed meanwhile; `revert` keeps history intact and is the only correct option once teammates may have the commits.
-
-### Scenario 5: Accidentally Deleted or Overwrote a File
-
-Find the last commit that had the file:
-
-```bash
-git log --oneline --all -- <file>
-```
-
-Show the user the history and ask which version to restore. Then:
-
-```bash
-git show <hash>:<file>    # Preview the file contents
-```
-
-Ask: "Restore this version? (y/n)"
-
-```bash
-git checkout <hash> -- <file>
-```
-
-If the user doesn't know the filename or path:
-
-```bash
-git log --oneline --diff-filter=D -- "**/*"   # Recently deleted files
-```
-
-After restoring, the file is staged. Ask: "Stage and commit the restored file? (y/n)"
-
-### Scenario 6: Bad Rebase — Go Back to Pre-Rebase State
-
-`git reflog` is the escape hatch — it records every position your branch has been in, like an undo history for git itself.
-
-```bash
-git reflog | head -20
-```
-
-Show the output and explain it:
-```
-Recent history (most recent first):
-
-abc1234 HEAD@{0}: rebase (finish): returning to refs/heads/fb
-def5678 HEAD@{1}: rebase (pick): feat: last commit
-...
-zzz9999 HEAD@{8}: checkout: moving from main to fb     ← before rebase
-
-The last entry before the rebase is HEAD@{8} (zzz9999).
-Restore to that point? (y/n)
-```
-
-Show what will be lost:
-```bash
-git diff <pre-rebase-ref>..HEAD --stat
-```
-
-Only proceed on confirmation:
-```bash
-git reset --hard <pre-rebase-ref>
-```
-
-Then offer to re-sync cleanly: "Want to run smart-sync now to redo the rebase with guidance?"
-
-### Scenario 7: Discard ALL Uncommitted Changes
-
-This is irreversible. Show exactly what will be lost:
-
-```bash
-git status
-git diff --stat
-```
-
-```
-WARNING: All of the following will be permanently discarded:
-  M  src/amazon/dashboard.tsx (+42 lines)
-  M  src/utils/api.ts (+8 lines)
-  ?  src/amazon/NewWidget.tsx (untracked — will be deleted)
-
-There is no undo. Type 'yes' to confirm:
-```
-
-Only on `yes`:
-```bash
-git checkout -- .
-git clean -fd    # Remove untracked files
-```
-
-Show `git status` after to confirm clean state.
-
----
-
-## The Reflog Safety Net
-
-At the end of any recovery, remind the user:
-
-```
-Remember: git reflog shows every state your repo has been in for the past 90 days.
-If something still looks wrong, run: git reflog
-It's your ultimate escape hatch.
-```
+**7. Discard ALL uncommitted changes** (irreversible)
+Show `git status` and `git diff --stat`, list untracked files that will vanish. Offer the backup stash (`-u`) first. Only on `yes`: `git reset --hard HEAD && git clean -fd` (skip both if the stash already cleaned the tree). Run `git status` afterwards.
 
 ## Rules
 
-- Always show what will happen before executing any recovery
-- Always confirm destructive operations with explicit user approval
-- For pushed commits: prefer `git revert` over history rewriting
-- For unpushed commits: prefer `git reset --soft` over `--hard`
-- Never skip `git reflog` as an option when the user is unsure what state they're in
-- After recovery, always run `git status` and `git log --oneline -5` to verify
+- Never skip the preview for destructive operations
+- Never force-push a protected or shared branch; revert instead
+- After recovery always run `git status` and `git log --oneline -5`

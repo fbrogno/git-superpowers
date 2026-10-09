@@ -8,13 +8,13 @@
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License: MIT" />
   </a>
-  <img src="https://img.shields.io/badge/Skills-20-orange?style=for-the-badge" alt="20 Skills" />
+  <img src="https://img.shields.io/badge/Skills-24-orange?style=for-the-badge" alt="24 Skills" />
   <img src="https://img.shields.io/badge/Agents-4-blue?style=for-the-badge" alt="4 Agents" />
   <img src="https://img.shields.io/badge/Guard_Hook-enforced-red?style=for-the-badge" alt="Guard Hook" />
   <img src="https://img.shields.io/badge/Claude_Code-Plugin-blueviolet?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code Plugin" />
   <img src="https://img.shields.io/badge/Dependencies-0-brightgreen?style=for-the-badge" alt="Zero Dependencies" />
-  <a href="https://github.com/Fxbio04/git-superpowers/actions/workflows/validate.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Fxbio04/git-superpowers/validate.yml?style=for-the-badge&label=validate" alt="CI" />
+  <a href="https://github.com/fbrogno/git-superpowers/actions/workflows/validate.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/fbrogno/git-superpowers/validate.yml?style=for-the-badge&label=validate" alt="CI" />
   </a>
 </p>
 
@@ -29,7 +29,7 @@
 ## Quick Start
 
 ```
-/plugin marketplace add Fxbio04/git-superpowers && /plugin install git-superpowers@git-superpowers
+/plugin marketplace add fbrogno/git-superpowers && /plugin install git-superpowers@git-superpowers
 ```
 
 Then just talk to Claude:
@@ -98,7 +98,9 @@ Then just talk to Claude:
 |---|---|
 | `cherry-pick` | Picks specific commits from other branches. Shows preview, checks for duplicates, handles conflicts. |
 | `selective-merge` | Takes specific files (not commits) from another branch. Replace completely or merge specific parts. |
-| `hotfix` | Emergency workflow: stash → branch from main → fix → audit → push → PR → return to previous branch. |
+| `hotfix` | Emergency workflow for production: fix in a separate worktree (your work stays untouched; stash only as fallback) → audit → PR → back. |
+| `worktree` | Work on a second branch in parallel without stashing — create, list and safely remove worktrees. |
+| `stash` | Inspect stashes, apply by message, recover dropped stashes — never drops without showing the contents first. |
 
 ### Pull Requests, CI & Releases
 
@@ -106,6 +108,7 @@ Then just talk to Claude:
 |---|---|
 | `pr-prep` | Audits branch, conflict dry-run, pushes, respects the repo's PR template, creates or updates the PR via `gh` (draft, reviewers, base override, stacked PRs). |
 | `pr-review` | The other side: reviews a teammate's PR — diff analysis, drafted verdict + inline comments, submitted only after your approval. |
+| `pr-feedback` | Your own PR got review comments — verify each, clarify unclear ones first, fix one by one, reply in the thread, resolve only what was fixed. |
 | `ci-fix` | Red checks → fetches only the failed step logs, isolates the first real error, reproduces locally, fixes the cause (never the symptom), watches it go green. |
 | `release` | Semver bump derived from commits, version-file sync, annotated tag, `gh release create` with curated notes. |
 
@@ -120,6 +123,7 @@ Then just talk to Claude:
 | Skill | What it does |
 |---|---|
 | `git-history` | File/function/line history as a readable narrative. Who changed what, when, why — not raw git output. |
+| `bisect` | Finds the commit that broke something with `git bisect run` in a temporary worktree — your tree is never touched. |
 | `git-undo` | Safe recovery: undo commits, revert pushes, restore files, escape bad rebases. Always shows the safest option first — and never force-pushes shared branches. |
 
 ### Agents (spawned by skills for complex tasks)
@@ -138,13 +142,13 @@ Then just talk to Claude:
 ### Claude Code
 
 ```
-/plugin marketplace add Fxbio04/git-superpowers && /plugin install git-superpowers@git-superpowers
+/plugin marketplace add fbrogno/git-superpowers && /plugin install git-superpowers@git-superpowers
 ```
 
 ### CLI
 
 ```bash
-claude plugin marketplace add Fxbio04/git-superpowers && claude plugin install git-superpowers@git-superpowers
+claude plugin marketplace add fbrogno/git-superpowers && claude plugin install git-superpowers@git-superpowers
 ```
 
 ### Update
@@ -160,7 +164,7 @@ claude plugin marketplace add Fxbio04/git-superpowers && claude plugin install g
 ### Token Efficiency
 
 - `--stat` and `--name-only` first — full diffs only when semantic analysis is needed
-- Safety rules inline in each skill — no redundant reference reads
+- Skill descriptions say only *when* to use a skill; shared boilerplate lives once in `references/common-snippets.md`
 - Agents spawn only for complex tasks (>10 files, >500 line diffs, >5 repos)
 - Example outputs described, not shown — Claude knows how to format
 
@@ -179,6 +183,10 @@ A PreToolUse hook (`hooks/git-guard.sh`) deterministically blocks the dangerous 
 - bare `git push --force` → blocked (use `--force-with-lease --force-if-includes`)
 - `--no-verify` → blocked (fix the hook failure instead)
 - any force-push to `main`/`master`/`develop`/`staging`/`production`/`release/*` → blocked
+- force in every spelling: `+refspec`, `-uf`, `git -C dir push -f`, subshells, `bash -c`, quoted branch names, a bare `--force-with-lease` while on a protected branch
+- `git commit -n`, deleting or mirroring protected branches, `git add :/` / `*`
+
+The guard parses commands like a shell (quotes, heredocs, `;`/`&&`/`|`, `$( )`, abbreviated options, wrappers like `nice`/`timeout`) and needs `python3`; without it, it fails open with a warning. It exists to stop *accidental* dangerous commands — it is not a security boundary against deliberate evasion (shell variables, aliases defined elsewhere, scripts).
 
 The prose rules cover what a regex can't judge:
 
@@ -222,26 +230,28 @@ port_registry: ~/infra/ports.yml   # authoritative port claims per repo
 
 ```
 git-superpowers/
-├── skills/              # 20 Skills (SKILL.md each)
+├── skills/              # 24 Skills (SKILL.md each)
 ├── agents/              # 4 Subagents (read-only tools, spawned by skills)
 ├── hooks/               # git-guard.sh (PreToolUse) + its test suite
-├── references/          # 5 Shared references
+├── references/          # 6 Shared references
+│   ├── common-snippets.md   # BASE detection, preflight, commit template, verification
 │   ├── git-safety.md        # Safety rules, protected branches, adaptive output
 │   ├── topic-detection.md   # Progressive topic grouping
 │   ├── hunk-analysis.md     # Hunk-level selective staging
 │   ├── conflict-resolution.md  # Topic-aware conflict strategy
 │   └── branch-history.md    # Efficient git history commands
-├── scripts/validate.py  # Structure validation (runs in CI and locally)
+├── scripts/             # validate.py (skill-authoring rules), lint-shell.sh, bump-version.sh
+├── tests/triggers/      # opt-in trigger tests: does "pushen" really fire safe-push?
 └── .github/workflows/   # CI: validation + hook regression tests
 ```
 
-**Zero dependencies.** The skills run entirely through Claude's native capabilities — reading diffs, understanding code, executing git commands. The only executable code is the safety guard hook and the CI validator (bash + Python stdlib, nothing to install).
+**Zero dependencies.** The skills run entirely through Claude's native capabilities — reading diffs, understanding code, executing git commands. The only executable code is the safety guard hook and the CI tooling (bash + Python 3 stdlib, nothing to install).
 
 ---
 
 ## Author
 
-[@Fxbio04](https://github.com/Fxbio04)
+[@fbrogno](https://github.com/fbrogno)
 
 ## License
 

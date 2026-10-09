@@ -1,159 +1,50 @@
 ---
 name: daily-workflow
-description: Guided git workflow that chains skills together — sync, commit, review, push, PR in one flow. Triggers: "tagesablauf", "daily workflow", "alles auf einmal", "commit und push", "full workflow", "was muss ich machen", /daily-workflow.
+description: Use when the user wants the whole ship-it chain in one go — "alles auf einmal", "commit und push und PR", "full workflow", "Tagesablauf", "daily workflow", "was muss ich machen" at the start or end of the day. Not for a single operation: a lone "commit" goes to smart-commit, a lone "push" to safe-push.
 ---
 
 # Daily Workflow
 
-A guided, chained workflow that runs the right skills in the right order. Instead of invoking skills one by one, this skill asks what you want to accomplish and walks you through the entire pipeline.
+Orchestrator: look at the repo state, propose the right chain of skills, run them in order. It never replaces the skills; each step follows its own skill's full workflow and safety rules.
 
-## Safety (always apply)
-- Each step uses its own skill's safety rules
-- Always confirm before destructive operations
-- The user can exit at any point — no step is mandatory
+## Safety
+- Each step keeps its own skill's safety rules, including in quick mode
+- Destructive steps still need confirmation; the user can exit at any point
+- A failing step pauses the pipeline, nothing is skipped silently
 
 ## Workflow
 
-### Step 1: Assess the Situation
-
-Gather the current state in one pass:
-
+### 1. Assess
+One Bash call (`$BASE` per `references/common-snippets.md#base-branch`):
 ```bash
-BRANCH=$(git branch --show-current)
-git fetch origin --quiet
+BRANCH=$(git branch --show-current); git fetch origin --quiet
 BASE=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@.*/@@'); [ -z "$BASE" ] && BASE=main
-BEHIND=$(git rev-list --count HEAD..origin/$BASE 2>/dev/null || echo "?")
-AHEAD=$(git rev-list --count origin/$BASE..HEAD 2>/dev/null || echo "?")
-UNCOMMITTED=$(git status --porcelain | wc -l | tr -d ' ')
-UNPUSHED=$(git log --oneline origin/$BRANCH..HEAD 2>/dev/null | wc -l | tr -d ' ')
-echo "branch:$BRANCH base:$BASE behind:$BEHIND ahead:$AHEAD uncommitted:$UNCOMMITTED unpushed:$UNPUSHED"
+echo "branch:$BRANCH behind:$(git rev-list --count HEAD..origin/$BASE 2>/dev/null || echo ?) ahead:$(git rev-list --count origin/$BASE..HEAD 2>/dev/null || echo ?) uncommitted:$(git status --porcelain | wc -l | tr -d ' ') unpushed:$(git log --oneline origin/$BRANCH..HEAD 2>/dev/null | wc -l | tr -d ' ')"
 ```
+Show a short status block.
 
-Present a status summary:
+### 2. Suggest a chain from the state
 
-```
-Current state:
-  Branch: fb
-  Behind main: 12 commits ⚠️
-  Ahead of main: 5 commits
-  Uncommitted changes: 7 files
-  Unpushed commits: 3
+| State | Suggested chains |
+|---|---|
+| Behind + uncommitted | commit first (safer): `/smart-commit` → `/smart-sync` → `/safe-push`; or full: + `/diff-review` before sync and `/pr-prep` after push; or quick |
+| Behind, clean | `/smart-sync`; then `/safe-push`; then `/pr-prep` |
+| Uncommitted, not behind | `/smart-commit` → optionally `/diff-review` → `/safe-push` → optionally `/pr-prep`; or quick |
+| Unpushed only | `/safe-push`, optionally `/diff-review` before and `/pr-prep` after |
+| Clean and current | `/pr-review` for waiting PRs, `/ci-fix` for red checks, `/repo-overview`, `/branch-inspect`, or nothing |
 
-Recommended workflow:
-```
+Let the user pick a number or describe it.
 
-### Step 2: Suggest a Workflow
+### 3. Run the chain
+Between skills show progress (`✓ commit → ▶ review → ○ sync → ○ push`) and ask "continue / skip / stop". If a skill hits trouble (conflicts, audit findings), resolve it inside that skill first; if the user aborts a step, ask whether to skip it or stop.
 
-Based on the state, suggest the most appropriate flow:
+### 4. Quick mode ("schnell", "quick", "just do it")
+Commit as one combined commit with auto-message, sync if behind (conflicts: leave quick mode), push via safe-push (secrets or conflict markers: leave quick mode; debug lines and TODOs auto-fixed). Only optional questions are skipped.
 
-**If behind main + uncommitted changes:**
-```
-Your branch is behind main AND has uncommitted work.
-Recommended order:
-
-[1] Commit first, then sync (safer — your work is saved before rebasing)
-    → /smart-commit → /smart-sync → /safe-push
-
-[2] Sync first, then commit (gets latest code, but stashes your work temporarily)
-    → /smart-sync → /smart-commit → /safe-push
-
-[3] Full pipeline with review
-    → /smart-commit → /diff-review → /smart-sync → /safe-push → /pr-prep
-
-[4] Quick — commit all, sync, push (minimal questions)
-
-Which flow? (1-4, or describe what you need)
-```
-
-**If behind main, no uncommitted changes:**
-```
-Your branch is behind main.
-
-[1] Sync with main → /smart-sync
-[2] Sync and push → /smart-sync → /safe-push
-[3] Full pipeline → /smart-sync → /safe-push → /pr-prep
-```
-
-**If uncommitted changes, not behind:**
-```
-You have uncommitted work.
-
-[1] Commit → /smart-commit
-[2] Commit and push → /smart-commit → /safe-push
-[3] Commit, review, push → /smart-commit → /diff-review → /safe-push
-[4] Full pipeline → /smart-commit → /diff-review → /safe-push → /pr-prep
-[5] Quick — commit all and push (minimal questions)
-```
-
-**If unpushed commits, no other work:**
-```
-You have unpushed commits.
-
-[1] Push → /safe-push
-[2] Review first, then push → /diff-review → /safe-push
-[3] Push and create PR → /safe-push → /pr-prep
-```
-
-**If everything is clean:**
-```
-Branch is clean and up to date. ✓
-
-[1] Review open PRs waiting on you → /pr-review
-[2] Check CI status → /ci-fix
-[3] Check other repos → /repo-overview
-[4] Inspect other branches → /branch-inspect
-[5] Nothing to do
-```
-
-### Step 3: Execute the Pipeline
-
-Run each skill in sequence. Between each skill:
-
-1. **Show progress:**
-   ```
-   Pipeline: ✓ commit → ▶ review → ○ sync → ○ push
-   ```
-
-2. **Ask to continue:**
-   "Continue to the next step? (y = continue / s = skip this step / x = stop here)"
-
-3. **Handle failures:** If a skill encounters issues (conflicts during sync, audit failures during push), handle them within that skill before continuing. If the user aborts a step, ask: "Skip this step and continue the pipeline, or stop here?"
-
-### Step 4: Quick Mode
-
-When the user selects quick mode or says "schnell", "quick", "just do it":
-
-1. **Commit**: Run smart-commit with strategy "combined" — all changes in one commit, auto-generated message, no review question
-2. **Sync** (if behind): Run smart-sync — if conflicts arise, exit quick mode and resolve interactively
-3. **Push**: Run safe-push — if audit finds secrets or conflict markers, exit quick mode and show issues. Debug statements and TODOs are auto-fixed without asking.
-4. **Summary**: Show what was done
-
-Quick mode still respects all safety rules — secrets block the push, conflicts require attention, destructive operations need confirmation. It only skips optional questions and review steps.
-
-### Step 5: Pipeline Summary
-
-After the pipeline completes (or the user stops), show a summary:
-
-```
-Workflow complete:
-  ✓ Committed: 2 commits (feat(amazon): dashboard, fix(auth): redirect)
-  ✓ Synced: 12 commits from main, 1 conflict resolved
-  ✓ Pushed: 5 commits to origin/fb
-  ○ Skipped: PR prep
-
-Branch fb is now up to date and pushed.
-```
-
-## When NOT to Use This Skill
-
-- If the user asks for a specific operation ("just push"), use that skill directly
-- If the user is in the middle of active development and just wants to commit one thing
-- This skill is for "I'm done working and want to ship" or "I'm starting my day and need to get organized"
+### 5. Summary
+List what was committed, synced, pushed, skipped, and the final branch state from fresh `git status -sb` output.
 
 ## Rules
-
-- Never skip safety checks even in quick mode
-- Always show the pipeline progress so the user knows where they are
-- Always allow exiting the pipeline at any point
-- Each pipeline step uses the full skill workflow — this skill is an orchestrator, not a replacement
-- If a step fails, the pipeline pauses — don't skip ahead silently
+- Safety checks are never skipped, even in quick mode
+- Always show pipeline progress and allow exit
+- Orchestrator only: use the single skill directly when the user asks for one operation

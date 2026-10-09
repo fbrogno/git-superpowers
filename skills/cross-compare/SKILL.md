@@ -1,129 +1,44 @@
 ---
 name: cross-compare
-description: Compare a file or module across branches side-by-side with collision forecast. Triggers: "vergleich die branches", "compare X across branches", "wie sieht der code in den anderen branches aus", /cross-compare.
+description: Use when the user wants to see how one file, module or directory differs across several branches — "vergleich die Branches", "compare X across branches", "wie sieht der Code in den anderen Branches aus", "welche Branches haben diese Datei geändert". For overall branch activity use branch-inspect.
 ---
 
 # Cross-Compare
 
-Compare a specific file, module, or directory across all branches that have touched it. Instead of switching branches manually, this skill builds a side-by-side picture of how different branches diverge on the same code — and flags which branches would collide if merged.
+Compare a file, module or directory across all branches that touched it and forecast which branches would collide, without switching branches.
 
-## Safety (always apply)
-- Always `git fetch origin` before comparing — stale refs give wrong results
-- Use `--stat` first, full diffs only on explicit request
-- Check for detached HEAD and missing remote before starting
-
-**Default branch:** Commands below write `origin/main` for readability — detect the actual default branch first (Branch Detection in `references/git-safety.md`) and substitute if the repo uses something else.
+## Safety
+- `git fetch origin` first; `--stat` before full diffs, full diffs only on request
+- Preflight per `references/common-snippets.md#preflight`; `origin/main` below means `origin/$BASE` (`#base-branch`)
+- More than 5 relevant branches: ask the user to narrow down first
 
 ## Workflow
 
-### Step 1: Identify the Target
+### 1. Target
+Use a named path directly. Vague term ("amazon"): resolve via `git diff --name-only origin/main | grep -i <term>` and common patterns (`src/<module>/`, `src/components/<Name>`, `src/pages/<route>`); ask when several match.
 
-If the user named a path or module, use it directly. If vague (e.g., "how does amazon look"), resolve it:
-
-```bash
-git diff --name-only origin/main | grep -i <term>
-```
-
-Check common patterns: `src/<module>/`, `src/components/<Name>`, `src/pages/<route>`. Confirm with the user if multiple paths match:
-
-```
-Found these paths matching "amazon":
-[1] src/amazon/
-[2] src/components/AmazonWidget.tsx
-
-Which one? (number or type the full path)
-```
-
-### Step 2: Discover Relevant Branches
-
-Fetch all remote refs first — stale local refs give wrong results:
-
+### 2. Relevant branches
 ```bash
 git fetch origin --quiet
-git branch -r --sort=-committerdate --format='%(refname:short)'
+git branch -r --sort=-committerdate --format='%(refname:short)'      # minus origin/HEAD
+git diff --name-only origin/main...origin/<branch> -- <path>          # non-empty = touched it
 ```
+Run the per-branch diffs in one parallel Bash call. None touched it: "No branches modified `<path>`", stop.
 
-For each remote branch (excluding `origin/HEAD`), check whether it has any changes to the target path compared to the common merge-base:
-
-When comparing a path across N branches, gather all diffs in parallel — run one `git diff --stat` per branch simultaneously rather than sequentially.
-
+### 3. Per-branch summary
 ```bash
-git diff --name-only origin/main...origin/<branch> -- <path>
-```
-
-If the output is non-empty, the branch has touched that path. Collect the relevant branches.
-
-If no branch has changes to the path: "No branches have modified `<path>` — they all look the same as main." Stop.
-
-### Step 3: Per-Branch Summary
-
-For each relevant branch, show a compact summary. Token-efficient: use `--stat` and commit messages first, not full diffs.
-
-```bash
-# Change size
 git diff --stat origin/main...origin/<branch> -- <path>
-
-# Commits that touched this path on that branch
 git log --oneline origin/main..origin/<branch> -- <path>
 ```
+Table: Branch | Commits | +Lines | -Lines | one-sentence summary.
 
-Format as a comparison table: Branch | Commits | +Lines | -Lines | Summary. For each branch with changes, write a one-sentence human summary from commit messages.
-
-### Step 4: Conflict Prediction
-
-For each pair of branches that both modified the target, ask git itself whether they collide — `git merge-tree` is read-only and gives the real answer (comparing line numbers from two diverged diffs does not — the numbers refer to different file states):
-
+### 4. Collision forecast
+Ask git, do not compare line numbers across diverged diffs:
 ```bash
-# 0 = would merge cleanly, 1 = real conflicts (git >= 2.38)
-git merge-tree --write-tree origin/<branch-A> origin/<branch-B> >/dev/null 2>&1; echo $?
-
-# Which files conflict:
-git merge-tree --write-tree --name-only origin/<branch-A> origin/<branch-B> 2>/dev/null | tail -n +2
+git merge-tree --write-tree origin/<A> origin/<B> >/dev/null 2>&1; echo $?          # 0 clean, 1 conflicts (git >= 2.38)
+git merge-tree --write-tree --name-only origin/<A> origin/<B> 2>/dev/null | tail -n +2   # conflicting files
 ```
+Git < 2.38: file-level overlap only (`references/common-snippets.md#overlap` with the two branches and `-- <path>`). Risk per pair: **HIGH** merge-tree conflicts under the path, **MEDIUM** same file but merges cleanly (semantic review wise), **LOW** separate files.
 
-Fallback for git < 2.38 — file-level overlap only (cannot see line ranges across diverged branches):
-```bash
-MB=$(git merge-base origin/<branch-A> origin/<branch-B>)
-comm -12 \
-  <(git diff --name-only $MB..origin/<branch-A> -- <path> | sort) \
-  <(git diff --name-only $MB..origin/<branch-B> -- <path> | sort)
-```
-
-Report collision risk for each pair. Format: `branch_a ↔ branch_b: RISK_LEVEL` with a one-line explanation.
-
-Risk levels:
-- **HIGH**: `merge-tree` reports conflicts in files under the target path
-- **MEDIUM**: Both modified the same file, but `merge-tree` merges it cleanly (semantic review still wise)
-- **LOW**: Changes are in separate files within the path
-
-### Step 5: Optional — Show Full Diff
-
-If the user wants details on a specific branch:
-
-```
-See full diff for a branch? (fb / bb / no)
-```
-
-If yes:
-```bash
-git diff origin/main...origin/<branch> -- <path>
-```
-
-Show the diff with context. Read `references/hunk-analysis.md` if the diff needs to be annotated by topic.
-
-### Step 6: Recommendations
-
-Based on the analysis, offer clear next steps:
-
-- **If merges would conflict**: "Consider syncing fb from main before bb merges — this keeps your conflicts predictable."
-- **If one branch is strictly ahead**: "fb has the most complete version. If main needs this, fb is the candidate to merge."
-- **If branches have complementary changes**: "fb and bb changed different parts — both could be merged cleanly if done in order."
-
-Offer to run `cherry-pick` or `branch-inspect` for deeper follow-up.
-
-## Token Efficiency
-
-- Always use `--stat` first; read full diffs only on explicit request
-- Use `git log --oneline` for commit summaries (1 line per commit)
-- The `merge-tree` collision check happens entirely inside git — no large diff reads needed for collision detection
-- If more than 5 branches are relevant, ask the user to narrow down before running full analysis
+### 5. Details and recommendations
+On request `git diff origin/main...origin/<branch> -- <path>` (annotate by topic with `references/hunk-analysis.md`). Recommend: sync before a conflicting branch merges; the most complete branch is the merge candidate; complementary changes merge in order. Offer `/cherry-pick` or `/branch-inspect`.

@@ -12,5 +12,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate plugin structure
         run: python3 scripts/validate.py
+      - name: Version drift check
+        run: bash scripts/bump-version.sh --check
+      - name: Lint shell scripts (shellcheck preinstalled on ubuntu-latest)
+        run: |
+          shellcheck --version
+          bash scripts/lint-shell.sh --all
       - name: Test git-guard hook
         run: bash hooks/test-git-guard.sh

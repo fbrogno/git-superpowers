@@ -1,0 +1,1 @@
+What is the difference between a merge and a rebase in git? Just explain conceptually.

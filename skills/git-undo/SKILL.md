@@ -1,6 +1,6 @@
 ---
 name: git-undo
-description: Use when the user wants to undo or recover something in git — revert a commit, "mach rückgängig", "falscher Branch", pushed to the wrong branch, "letzten Commit ändern" (amend), squash the last commits, restore a deleted or overwritten file, escape a bad rebase, discard all local changes, "alles kaputt gemacht". Not for splitting a commit (commit-split) or stashes (stash).
+description: Use when the user wants to undo or recover something in git — revert a commit, "mach rückgängig", "falscher Branch", committed or pushed to the wrong branch, asks how to undo a commit, "letzten Commit ändern" (amend), squash the last commits, restore a deleted or overwritten file, escape a bad rebase, discard all local changes, "alles kaputt gemacht". Not for splitting a commit (commit-split) or stashes (stash).
 ---
 
 # Git Undo

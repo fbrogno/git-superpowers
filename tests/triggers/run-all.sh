@@ -15,3 +15,4 @@ if [[ $# -eq 0 ]]; then
 fi
 echo "---- passed: $pass, failed: $fail"
 [[ $fail -eq 0 ]]
+[ "$fail" -eq 0 ]

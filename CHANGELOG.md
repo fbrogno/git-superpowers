@@ -2,6 +2,32 @@
 
 All notable changes to git-superpowers. Format follows [Keep a Changelog](https://keepachangelog.com/), versioning follows [SemVer](https://semver.org/).
 
+## [4.0.0] — 2026-10-09
+
+Major because the guard now blocks considerably more (every force-push spelling, `commit -n`, deleting protected branches) and skill triggers were re-routed.
+
+### Security
+- **git-guard rewritten** with a shell-aware tokenizer (python3): closes force-push bypasses via `+refspec`, `git -C`/`-c`, combined flags (`-uf`), subshells/`bash -c`/`$( )`, quoted branch names, and a bare `--force-with-lease` while on a protected branch. Also blocks `git commit -n`, `push --mirror`, deleting protected branches, `git add :/` and `*`. Also covers abbreviated options (`--force-w`), `@`/`HEAD` refspecs, glued redirections, `bash -lc` and heredocs fed to a shell, `$'…'`/brace expansion, wrappers (`nice`, `timeout`, `xargs`, …), `-c core.hooksPath=` and force aliases, `--all`/`--prune`/wildcard pushes. Protected-branch detection looks at the refspec, not the remote name (no more false positives for a remote called `production`). Tests: 22 → 163, incl. macOS bash 3.2.
+
+### Fixed
+- `git-undo`: "discard all" also resets staged changes and offers a stash backup first; hard resets check for a dirty tree.
+- `conflict-simulator`: fallback runs in a temporary worktree — truly read-only.
+- `release`: detects `BREAKING CHANGE` footers, ignores lockfiles, release-PR path for protected base branches.
+- `deploy-check` / `repo-overview`: no 50-repo cap; compose files found in subfolders.
+- `smart-sync`: `--force-with-lease --force-if-includes`, no `--force` advice. All stashes use `-u`. No hard-coded co-author trailer.
+- Owner moved to `fbrogno`.
+
+### Added
+- Skills **`pr-feedback`**, **`bisect`**, **`stash`**, **`worktree`** (24 total).
+- `references/common-snippets.md` — shared BASE detection, preflight, commit template, verification rule.
+- Tooling: `scripts/lint-shell.sh` (shellcheck), `scripts/bump-version.sh` (+ `--check` drift), `tests/triggers/` (opt-in `claude -p` trigger tests, de/en + negatives); `validate.py` enforces skill-authoring rules, word budgets, version and skill-count sync.
+
+### Changed
+- All descriptions follow the "Use when …" rule (when to use, never the workflow) with de/en phrasings and "Not for …" clauses; overlapping triggers untangled.
+- Iron Law + Red Flags tables in the destructive skills; fresh-evidence rule before claiming "pushed" or "CI green".
+- Skills shrink from ~20k to ~10k words; `hotfix` prefers a worktree; `smart-sync` resolves in-progress merge conflicts; `git-undo` covers amend/squash; `pr-prep` can merge on request.
+- Agents: model set on all four, explicit read-only and no-subagent rules; `code-reviewer` diffs from the merge-base and returns a merge verdict.
+
 ## [3.2.0] — 2026-07-13
 
 ### Changed

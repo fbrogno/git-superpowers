@@ -1,7 +1,7 @@
 {
   "name": "git-superpowers",
-  "description": "20 Git & GitHub workflow skills for Claude Code: smart commits, safe rebasing, PR lifecycle (create, review, CI-fix, release), conflict prediction, deploy-config safety — plus a PreToolUse guard hook that enforces the safety rules",
-  "version": "3.2.0",
+  "description": "24 Git & GitHub workflow skills for Claude Code: smart commits, safe rebasing, PR lifecycle (create, review, CI-fix, release), conflict prediction, bisect, stash & worktree ops, deploy-config safety — plus a PreToolUse guard hook that enforces the safety rules",
+  "version": "4.0.0",
   "author": {
     "name": "fbrogno"
   },

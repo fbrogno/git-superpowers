@@ -102,6 +102,120 @@ git -C "$T" checkout -q -b feat
 checkc 0 'git push --force-with-lease' "$T" "lease-bare-on-feature"
 rm -rf "$T"
 
+# === v4.1 hardening (independent review): every case below was a verified bypass ===
+# 2. abbreviated long options
+check 2 '"git push --force-w origin main"'                       "abbr-force-with-lease"
+check 2 '"git push --delet origin main"'                         "abbr-delete"
+check 2 '"git push --mirro origin"'                              "abbr-mirror"
+check 2 '"git commit --no-verif -m x"'                           "abbr-no-verify"
+check 2 '"git add --al"'                                         "abbr-add-all"
+check 2 '"git push --force-with-lease --delet origin main"'      "abbr-delete-lease"
+check 0 '"git push --for origin feat"'                           "abbr-ambiguous-git-rejects"
+# 3. redirections glued to tokens
+check 2 '"git push -f>/dev/null origin feat"'                    "redir-glued-f"
+check 2 '"git push origin main --force>/dev/null"'               "redir-glued-force"
+check 2 '"git add .>/dev/null"'                                  "redir-glued-add-dot"
+check 2 '"git add -A>/dev/null"'                                 "redir-glued-add-A"
+check 2 '"git commit --no-verify>/dev/null -m x"'                "redir-glued-no-verify"
+check 2 '"git push -f 2>&1 origin feat"'                         "redir-2to1"
+check 2 '"git push -f &>out.log origin feat"'                    "redir-amp-gt"
+check 2 '"git push -f >>out.log origin feat"'                    "redir-append"
+check 2 '"git push -f <in.txt origin feat"'                      "redir-input"
+check 2 '"git add . 2>&1"'                                       "redir-add-dot"
+check 0 '"git add src/a.ts 2>&1 >/dev/null"'                     "redir-ok-add"
+check 0 '"git push origin feat >/dev/null 2>&1"'                 "redir-ok-push"
+check 0 '"git status 2>/dev/null | head -3"'                     "redir-ok-status"
+# 4. no prefilter: obfuscated 'git'
+check 2 '"g\\it push -f origin main"'                            "obf-backslash"
+check 2 '"gi\"\"t push -f origin main"'                          "obf-empty-quotes"
+check 2 '"\"g\"it push -f origin main"'                          "obf-quote-join"
+# 5. shell -c with option clusters
+check 2 '"bash -lc \"git push -f origin main\""'                 "bash-lc"
+check 2 '"sh -ec \"git push -f origin main\""'                   "sh-ec"
+check 2 '"zsh -c \"git push -f origin main\""'                   "zsh-c"
+check 2 '"bash -xc \"git push -f origin main\""'                 "bash-xc"
+check 2 '"bash -o pipefail -c \"git push -f origin main\""'      "bash-o-c"
+check 0 '"bash -lc \"git status\""'                              "bash-lc-ok"
+check 0 '"bash scripts/lint-shell.sh"'                           "bash-script-ok"
+# 6. heredoc fed to a shell
+check 2 '"bash <<X\ngit push -f origin main\nX"'                 "heredoc-bash"
+check 2 '"sh <<'"'"'X'"'"'\ngit push -f origin main\nX"'         "heredoc-sh-quoted"
+check 2 '"bash -s <<X\ngit push -f origin main\nX"'              "heredoc-bash-s"
+check 2 '"eval <<X\ngit push -f origin main\nX"'                 "heredoc-eval"
+check 2 '"source /dev/stdin <<X\ngit push -f origin main\nX"'    "heredoc-source"
+check 2 '"bash <<< \"git push -f origin main\""'                 "herestring-bash"
+check 2 '"cat <<X\n$(git push -f origin main)\nX"'               "heredoc-unquoted-subst"
+check 0 '"git commit -F - <<X\ngit push -f origin main\nX"'      "heredoc-commit-data"
+check 0 '"cat <<X\ngit push -f origin main\nX"'                  "heredoc-cat-data"
+check 0 '"cat <<'"'"'X'"'"'\n$(git push -f origin main)\nX"'     "heredoc-quoted-subst-data"
+check 0 '"bash script.sh <<X\ngit push -f origin main\nX"'       "heredoc-script-stdin-data"
+# 8. heredoc marker inside quotes is not a heredoc
+check 2 '"echo \"<<Y\"\ngit push -f origin main"'               "fake-heredoc-in-quotes"
+# 9. ANSI-C quoting and brace expansion
+check 2 '"git push $'"'"'-f'"'"' origin feat"'                   "ansi-c-f"
+check 2 '"git push $'"'"'\\x2df'"'"' origin feat"'               "ansi-c-hex"
+check 2 '"git push origin {-f,feat}"'                            "brace-f"
+check 2 '"git push {--force,x} origin feat"'                     "brace-force"
+check 0 '"git commit -m \"{a,b}\""'                              "brace-quoted-ok"
+check 0 '"git add src/{a,b}.ts"'                                 "brace-add-ok"
+# 10. wrappers
+check 2 '"nice git push -f origin main"'                         "wrap-nice"
+check 2 '"nice -n 5 git push -f origin main"'                    "wrap-nice-n"
+check 2 '"timeout 60 git push -f origin main"'                   "wrap-timeout"
+check 2 '"timeout -k 5 60 git push -f origin main"'              "wrap-timeout-k"
+check 2 '"caffeinate -i git push -f origin main"'                "wrap-caffeinate"
+check 2 '"caffeinate -t 60 git push -f origin main"'             "wrap-caffeinate-t"
+check 2 '"xargs git push -f origin main"'                        "wrap-xargs"
+check 2 '"echo x | xargs -n 1 git push -f origin main"'          "wrap-xargs-n"
+check 2 '"stdbuf -oL git push -f origin main"'                   "wrap-stdbuf"
+check 2 '"ionice -c 3 git push -f origin main"'                  "wrap-ionice"
+check 2 '"exec git push -f origin main"'                         "wrap-exec"
+check 2 '"nohup git push -f origin main"'                        "wrap-nohup"
+check 2 '"command git push -f origin main"'                      "wrap-command"
+check 2 '"env -S \"git push -f origin main\""'                   "wrap-env-S"
+check 0 '"timeout 60 git status"'                                "wrap-ok"
+# 11. config injection
+check 2 '"git -c core.hooksPath=/dev/null commit -m x"'          "cfg-hookspath"
+check 2 '"git --config-env core.hooksPath=X commit -m x"'        "cfg-env-hookspath"
+check 2 '"git --config-env=core.hooksPath=X commit -m x"'        "cfg-env-hookspath-eq"
+check 2 '"git -c alias.p=\"push -f\" p origin main"'             "cfg-alias-push"
+check 2 '"git -c alias.p=!sh p"'                                 "cfg-alias-bang"
+check 0 '"git -c user.name=x commit -m y"'                       "cfg-ok"
+# 12. force-if-includes is not a lease
+check 2 '"git push -f --force-if-includes origin feat"'          "force-if-includes-not-lease"
+check 0 '"git push --force-if-includes origin feat"'             "if-includes-alone-ok"
+# 13. add path normalization
+check 2 '"git add ./"'                                           "add-dotslash"
+check 2 '"git add \"./\""'                                       "add-dotslash-quoted"
+check 2 '"git add :/"'                                           "add-top"
+check 2 '"git add \"**\""'                                       "add-doublestar"
+check 2 '"git add .//"'                                          "add-dot-slashes"
+check 2 '"git add ./*"'                                          "add-dotslash-star"
+check 2 '"git add \":(top)\""'                                     "add-top-magic"
+check 0 '"git add ./src ./docs/a.md"'                            "add-subdirs-ok"
+check 0 '"git add -p file.ts"'                                   "add-patch-ok"
+# 7. lease with wildcards / --all / --prune / matching refspec
+check 2 '"git push --force-with-lease --all origin"'             "lease-all"
+check 2 '"git push --force-with-lease --branches origin"'        "lease-branches"
+check 2 '"git push --force-with-lease origin \"refs/heads/*:refs/heads/*\""' "lease-wildcard"
+check 2 '"git push --prune origin \"refs/heads/*:refs/heads/*\""' "prune-wildcard"
+check 2 '"git push --prune"'                                     "prune-bare"
+check 2 '"git push --prune --all origin"'                        "prune-all"
+check 2 '"git push --force-with-lease origin :"'                 "lease-matching-colon"
+check 0 '"git push --prune origin feat"'                         "prune-explicit-ok"
+check 0 '"git push --all origin"'                                "plain-all-ok"
+
+# cwd-aware: @ and other symbolic refspecs resolve to the current branch
+T2=$(mktemp -d); git -C "$T2" init -q -b main 2>/dev/null || { git -C "$T2" init -q; git -C "$T2" checkout -q -b main; }
+git -C "$T2" -c user.email=a@b -c user.name=t commit -q --allow-empty -m i
+checkc 2 'git push --force-with-lease origin @' "$T2" "lease-at-on-main"
+checkc 2 'git push --force-with-lease origin HEAD' "$T2" "lease-head-on-main"
+checkc 2 'git push --force-with-lease origin HEAD~0' "$T2" "lease-head-tilde-on-main"
+checkc 2 'git push --force-with-lease origin main^0' "$T2" "lease-main-caret"
+git -C "$T2" checkout -q -b feat
+checkc 0 'git push --force-with-lease origin @' "$T2" "lease-at-on-feature"
+rm -rf "$T2"
+
 # Malformed input must fail open
 printf 'not json' | bash "$GUARD" >/dev/null 2>&1
 if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); echo "FAIL (malformed-input)"; fi

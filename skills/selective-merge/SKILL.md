@@ -94,7 +94,7 @@ Options:
 
 Wait for the user's choice before proceeding.
 
-If option 1: `git stash push -m "selective-merge auto-stash <file>"`
+If option 1: `git stash push -u -m "selective-merge: park work before taking <file>"`
 If option 2: guide through a quick commit of the local file first
 
 ### Step 4: Choose Merge Strategy

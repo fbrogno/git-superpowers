@@ -74,7 +74,15 @@ This is reversible — you can redo the commit. Proceed? (y/n)
 
 ### Scenario 2: Undo Last Commit AND Discard Changes
 
-This is destructive — file changes are permanently lost.
+This is destructive. The commit itself stays recoverable via `git reflog` (~90 days), but uncommitted working-tree changes are permanently lost.
+
+First check the tree is clean:
+
+```bash
+git status --porcelain    # any output = dirty tree
+```
+
+If dirty: stop. Offer to stash first (`git stash push -u -m "git-undo backup $(date +%Y-%m-%d-%H%M)"`, recoverable via `git stash list`) or to commit the changes — only continue once the tree is clean or the user explicitly accepts losing those changes.
 
 ```bash
 git log --oneline -3    # Show what will be lost
@@ -83,11 +91,12 @@ git diff HEAD~1..HEAD --stat    # Show what files will be affected
 
 Show before running:
 ```
-WARNING: This will permanently discard:
+WARNING: This will discard:
   abc1234 feat(amazon): add dashboard
   → 5 files changed, 142 insertions
 
-The file changes CANNOT be recovered after this.
+The commit stays recoverable via `git reflog` (~90 days).
+Uncommitted changes in your working tree (none right now) would be permanently lost.
 Are you sure? Type 'yes' to confirm:
 ```
 
@@ -163,7 +172,7 @@ How to remove them depends on whether the mistake was already pushed — check f
 git log --oneline origin/<wrong-branch>..HEAD
 ```
 
-**Mistake NOT pushed yet** (the commits appear in the output): the remote is still clean — just reset the local branch to it. No force push needed:
+**Mistake NOT pushed yet** (the commits appear in the output): the remote is still clean — just reset the local branch to it. No force push needed. Check `git status --porcelain` first; if dirty, offer `git stash push -u -m "git-undo backup <date>"` before the hard reset:
 
 ```bash
 git reset --hard origin/<wrong-branch>
@@ -240,7 +249,7 @@ Show what will be lost:
 git diff <pre-rebase-ref>..HEAD --stat
 ```
 
-Only proceed on confirmation:
+Only proceed on confirmation (and only with a clean `git status --porcelain` — otherwise offer `git stash push -u -m "git-undo backup <date>"` first):
 ```bash
 git reset --hard <pre-rebase-ref>
 ```
@@ -257,18 +266,26 @@ git diff --stat
 ```
 
 ```
-WARNING: All of the following will be permanently discarded:
+WARNING: All of the following will be discarded (staged and unstaged):
   M  src/amazon/dashboard.tsx (+42 lines)
   M  src/utils/api.ts (+8 lines)
   ?  src/amazon/NewWidget.tsx (untracked — will be deleted)
 
-There is no undo. Type 'yes' to confirm:
+Safety net: I can first save everything to a stash
+  (git stash push -u -m "git-undo backup <date>" — recover via `git stash list`).
+Without the backup there is no undo. Backup first? (recommended)
+Type 'yes' to confirm the discard:
 ```
 
-Only on `yes`:
+Offer the backup first and run it if accepted (`-u` includes untracked files):
 ```bash
-git checkout -- .
-git clean -fd    # Remove untracked files
+git stash push -u -m "git-undo backup $(date +%Y-%m-%d-%H%M)"
+```
+
+Only on `yes` — if the stash was made, the tree is already clean and nothing more is needed; otherwise:
+```bash
+git reset --hard HEAD    # Discards staged AND unstaged changes to tracked files
+git clean -fd            # Remove untracked files
 ```
 
 Show `git status` after to confirm clean state.

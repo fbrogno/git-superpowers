@@ -82,7 +82,7 @@ git add <specific-files>
 git commit -m "$(cat <<'EOF'
 fix(ci): <what was actually wrong>
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+<attribution trailer, if your harness or the user's instructions specify one>
 EOF
 )"
 git push origin <branch>

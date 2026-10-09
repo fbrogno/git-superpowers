@@ -32,7 +32,7 @@ git status --porcelain
 
 If there are uncommitted changes:
 ```bash
-git stash push -m "hotfix auto-stash $(date +%Y-%m-%d-%H%M)"
+git stash push -u -m "hotfix: park work before switching to hotfix branch $(date +%Y-%m-%d-%H%M)"
 ```
 
 Confirm: "Stashed your current work. It'll be waiting when you return."
@@ -125,7 +125,7 @@ git add <specific-files>
 git commit -m "$(cat <<'EOF'
 fix(<scope>): <description>
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+<attribution trailer, if your harness or the user's instructions specify one>
 EOF
 )"
 ```

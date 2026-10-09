@@ -13,8 +13,8 @@
   <img src="https://img.shields.io/badge/Guard_Hook-enforced-red?style=for-the-badge" alt="Guard Hook" />
   <img src="https://img.shields.io/badge/Claude_Code-Plugin-blueviolet?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code Plugin" />
   <img src="https://img.shields.io/badge/Dependencies-0-brightgreen?style=for-the-badge" alt="Zero Dependencies" />
-  <a href="https://github.com/Fxbio04/git-superpowers/actions/workflows/validate.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Fxbio04/git-superpowers/validate.yml?style=for-the-badge&label=validate" alt="CI" />
+  <a href="https://github.com/fbrogno/git-superpowers/actions/workflows/validate.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/fbrogno/git-superpowers/validate.yml?style=for-the-badge&label=validate" alt="CI" />
   </a>
 </p>
 
@@ -29,7 +29,7 @@
 ## Quick Start
 
 ```
-/plugin marketplace add Fxbio04/git-superpowers && /plugin install git-superpowers@git-superpowers
+/plugin marketplace add fbrogno/git-superpowers && /plugin install git-superpowers@git-superpowers
 ```
 
 Then just talk to Claude:
@@ -138,13 +138,13 @@ Then just talk to Claude:
 ### Claude Code
 
 ```
-/plugin marketplace add Fxbio04/git-superpowers && /plugin install git-superpowers@git-superpowers
+/plugin marketplace add fbrogno/git-superpowers && /plugin install git-superpowers@git-superpowers
 ```
 
 ### CLI
 
 ```bash
-claude plugin marketplace add Fxbio04/git-superpowers && claude plugin install git-superpowers@git-superpowers
+claude plugin marketplace add fbrogno/git-superpowers && claude plugin install git-superpowers@git-superpowers
 ```
 
 ### Update
@@ -241,7 +241,7 @@ git-superpowers/
 
 ## Author
 
-[@Fxbio04](https://github.com/Fxbio04)
+[@fbrogno](https://github.com/fbrogno)
 
 ## License
 

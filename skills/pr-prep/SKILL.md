@@ -29,7 +29,7 @@ git status --porcelain
 gh auth status >/dev/null 2>&1 && echo "gh:ok" || echo "gh:unavailable"
 ```
 
-- **Uncommitted changes** → stop: "Commit or stash first — run /smart-commit, or: `git stash push -m 'pr-prep stash'`"
+- **Uncommitted changes** → stop: "Commit or stash first — run /smart-commit, or: `git stash push -u -m 'pr-prep: before audit'`"
 - **`gh:unavailable`** → continue through the audit, but end with title + description formatted for copy-paste instead of creating the PR. If `gh` is installed but not authenticated, say so: `gh auth login` fixes it.
 - **On the base branch itself** (`$BRANCH` = `$BASE`) → stop: PRs need a feature branch. Offer to create one from the current state.
 - **Base override:** If the user targets a different base (`develop`, a release branch, or another feature branch for a stacked PR), set `$BASE` accordingly — everything below uses `$BASE`, never a hardcoded `main`.

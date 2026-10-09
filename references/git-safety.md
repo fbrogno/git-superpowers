@@ -92,7 +92,7 @@ Adapt to the repo instead of imposing preferences:
 - Always show the proposed commit message and get user confirmation
 - Default to Conventional Commits format (feat, fix, refactor, chore, style, docs) unless the repo's history uses a different style — see Workflow Conventions
 - If a pre-commit hook fails, no commit was created — fix the cause and run `git commit` again (never `--no-verify`). If hooks auto-modified files, re-stage those files and commit again. Never `--amend` a commit that might already be pushed.
-- Always append: `Co-Authored-By: Claude <noreply@anthropic.com>`
+- Append the co-author/attribution trailer your harness or the user's instructions specify (if any); never hard-code a model name
 
 ## Destructive Operation Safety
 

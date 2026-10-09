@@ -107,32 +107,24 @@ fi
 
 Always rely on the exit status to determine if conflicts exist — an empty grep result with exit code 1 still means conflicts.
 
-**For older git versions** (before 2.38) that do not support `--write-tree`, fall back to the detached HEAD approach:
+**For older git versions** (before 2.38) that do not support `--write-tree`, fall back to a temporary worktree — your own worktree, index and stash stay untouched (no stash, no checkout):
 
 ```bash
-# Record current state
-CURRENT_BRANCH=$(git branch --show-current)
-STASH_MSG="conflict-sim-$(date +%s)"
+tmp=$(mktemp -d)
+git worktree add --detach "$tmp" HEAD
 
-# Stash if there are uncommitted changes
-git stash push -m "$STASH_MSG" 2>/dev/null
+# Trial merge inside the temp worktree only
+git -C "$tmp" merge --no-commit --no-ff origin/main 2>&1
+CONFLICTED=$(git -C "$tmp" diff --name-only --diff-filter=U)
 
-# Detach HEAD so we don't modify any branch
-git checkout --detach HEAD
-
-# Attempt merge without committing
-git merge --no-commit --no-ff origin/main 2>&1
-
-# Capture conflicted files
-CONFLICTED=$(git diff --name-only --diff-filter=U)
-
-# Clean up — abort merge and return
-git merge --abort 2>/dev/null || true
-git checkout "$CURRENT_BRANCH"
-
-# Restore stash if we created one
-git stash list | grep -q "$STASH_MSG" && git stash pop 2>/dev/null || true
+# Clean up. --force is safe here: the temp worktree is our own throwaway
+# (created above), never the user's worktree.
+git -C "$tmp" merge --abort 2>/dev/null || true
+git worktree remove --force "$tmp"
+git worktree prune
 ```
+
+For a rebase trial, run `git -C "$tmp" rebase origin/main` instead and finish with `git -C "$tmp" rebase --abort`.
 
 ### Step 6: Verify State Was Preserved
 

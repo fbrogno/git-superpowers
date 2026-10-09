@@ -138,7 +138,7 @@ chore: cleanup before push
 - Remove debug statements
 - [other fixes applied]
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+<attribution trailer, if your harness or the user's instructions specify one>
 EOF
 )"
 ```

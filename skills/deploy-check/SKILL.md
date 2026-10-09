@@ -56,13 +56,15 @@ for repo in <discovered-repo-paths>; do
 done
 ```
 
-Then org repos that aren't cloned, via `gh` (no clone needed; 404s are normal, ignore them):
+Then org repos that aren't cloned, via `gh` (no clone needed; 404s are normal, ignore them; `--limit 1000` because the default/small limits silently skip repos in larger orgs):
 
 ```bash
-for r in $(gh repo list <org> --limit 50 --json nameWithOwner --jq '.[].nameWithOwner'); do
-  for f in docker-compose.yml compose.yml docker-compose.yaml; do
+for r in $(gh repo list <org> --limit 1000 --json nameWithOwner --jq '.[].nameWithOwner'); do
+  # tree API finds compose files in subfolders too, still without cloning
+  for f in $(gh api "repos/$r/git/trees/HEAD?recursive=1" --jq '.tree[].path' 2>/dev/null \
+             | grep -E '(^|/)(docker-)?compose[^/]*\.ya?ml$'); do
     gh api "repos/$r/contents/$f" --jq .content 2>/dev/null | base64 -d 2>/dev/null \
-      | grep -hE '"?([0-9.]+:)?[0-9]{2,5}:[0-9]+"?' | sed "s|^|$r: |"
+      | grep -hE '"?([0-9.]+:)?[0-9]{2,5}:[0-9]+"?' | sed "s|^|$r/$f: |"
   done
 done
 ```

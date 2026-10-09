@@ -103,9 +103,9 @@ If available, list repos from the user's GitHub organizations that aren't cloned
 
 ```bash
 # Own repos + each org's repos
-gh repo list --limit 50 --json nameWithOwner,updatedAt --jq '.[] | "\(.nameWithOwner) \(.updatedAt)"'
+gh repo list --limit 1000 --json nameWithOwner,updatedAt --jq '.[] | "\(.nameWithOwner) \(.updatedAt)"'
 for org in $(gh api user/orgs --jq '.[].login' 2>/dev/null); do
-  gh repo list "$org" --limit 50 --json nameWithOwner,updatedAt --jq '.[] | "\(.nameWithOwner) \(.updatedAt)"'
+  gh repo list "$org" --limit 1000 --json nameWithOwner,updatedAt --jq '.[] | "\(.nameWithOwner) \(.updatedAt)"'
 done
 ```
 

@@ -127,7 +127,7 @@ feat(amazon): add analytics dashboard with KPI grid and charts
 - DashboardView with KPI cards and trend visualization
 - ProductAnalysisView with cluster filtering
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+<attribution trailer, if your harness or the user's instructions specify one>
 EOF
 )"
 ```
@@ -172,4 +172,4 @@ Skip this menu in quick mode — just show "Committed. Run `/safe-push` when rea
 - Always show `git diff --cached --stat` after staging for verification
 - Always show the commit message for user approval before committing
 - On pre-commit hook failure: fix the issue and create a NEW commit (never `--amend`)
-- Always append `Co-Authored-By: Claude <noreply@anthropic.com>`
+- Append the co-author/attribution trailer your harness or the user's instructions specify (if any); never hard-code a model name

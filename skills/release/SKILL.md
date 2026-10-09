@@ -35,7 +35,8 @@ Requirements before continuing — each failure stops with a concrete instructio
 ### Step 2: What's in This Release?
 
 ```bash
-git log --oneline ${LAST_TAG}..HEAD              # "none" → use full history, suggest v0.1.0 or v1.0.0
+git log --oneline ${LAST_TAG}..HEAD              # overview; "none" → use full history, suggest v0.1.0 or v1.0.0
+git log --format=%B ${LAST_TAG}..HEAD | grep -E '^BREAKING[ -]CHANGE|^[a-z]+(\(.+\))?!:'   # full bodies: catches footers --oneline misses
 ```
 
 Group by Conventional-Commit type. Derive the version bump:
@@ -61,7 +62,7 @@ OK, or different version?
 Find every place the version lives — tag and files must agree:
 
 ```bash
-git grep -ln '"version"' -- '*.json' | head; ls setup.py pyproject.toml Cargo.toml 2>/dev/null
+git grep -ln '"version"' -- '*.json' ':!*lock*.json' | head; ls setup.py pyproject.toml Cargo.toml 2>/dev/null
 ```
 
 Update them (package.json, plugin manifest, marketplace.json, …), then commit:
@@ -71,7 +72,7 @@ git add <version-files>
 git commit -m "$(cat <<'EOF'
 chore(release): v<X.Y.Z>
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+<attribution trailer, if your harness or the user's instructions specify one>
 EOF
 )"
 ```
@@ -82,9 +83,29 @@ If a CHANGELOG.md exists (Keep-a-Changelog format), add the new section in the s
 
 Generate notes from the grouped commits — what changed *for the user of the software*, not a raw commit list. Show everything for confirmation, then:
 
+First decide how the version-bump commit reaches `$BASE`: check `gh api repos/{owner}/{repo}/branches/$BASE/protection` (success = protected) or simply ask the user: "direct push (unprotected repos) or release PR?"
+
+**Direct push** (unprotected):
 ```bash
 git tag -a v<X.Y.Z> -m "v<X.Y.Z>"
 git push origin "$BASE" --follow-tags
+```
+
+**Release PR** (protected, or user prefers it): the bump commit goes via a branch, the tag comes after merge:
+```bash
+git switch -c release/v<X.Y.Z>        # ideally before Step 3's commit
+# bump already committed on $BASE? the commit now lives on release/v<X.Y.Z> too, so move local $BASE back
+# without touching the worktree (only if `git log origin/$BASE..$BASE` shows nothing but the bump commit):
+git branch -f "$BASE" "origin/$BASE"
+git push -u origin release/v<X.Y.Z>
+gh pr create --base "$BASE" --title "chore(release): v<X.Y.Z>" --body "Version bump + changelog"
+# after the PR is merged:
+git switch "$BASE" && git pull --ff-only
+git tag -a v<X.Y.Z> -m "v<X.Y.Z>" && git push origin v<X.Y.Z>
+```
+
+Then create the release:
+```bash
 gh release create v<X.Y.Z> --title "v<X.Y.Z>" --notes "$(cat <<'EOF'
 <grouped notes>
 EOF

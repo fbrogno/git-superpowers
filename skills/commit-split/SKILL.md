@@ -32,7 +32,7 @@ git show --stat HEAD
 git status --porcelain
 ```
 
-If anything is uncommitted or staged, stop: "You have uncommitted changes. Commit them first (/smart-commit) or stash them (`git stash push -m 'before commit-split'`) — then we split." Only continue with a clean tree.
+If anything is uncommitted or staged, stop: "You have uncommitted changes. Commit them first (/smart-commit) or stash them (`git stash push -u -m 'commit-split: before split'`) — then we split." Only continue with a clean tree.
 
 Also show whether this commit has already been pushed — but only if an upstream actually exists, otherwise an unpushed branch looks "already pushed":
 
@@ -148,7 +148,7 @@ Show this to the user and confirm it contains only the expected changes for this
 git commit -m "$(cat <<'EOF'
 <proposed message for this topic>
 
-Co-Authored-By: Claude <noreply@anthropic.com>
+<attribution trailer, if your harness or the user's instructions specify one>
 EOF
 )"
 ```

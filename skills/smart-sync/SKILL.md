@@ -25,7 +25,7 @@ git status --porcelain
 
 If there are changes:
 ```bash
-git stash push -m "smart-sync auto-stash $(date +%Y-%m-%d-%H%M)"
+git stash push -u -m "smart-sync: auto-stash before rebase $(date +%Y-%m-%d-%H%M)"
 ```
 
 Tell the user: "Stashed your uncommitted changes — they'll be restored after sync."
@@ -173,10 +173,10 @@ If new conflicts appear (next commit), repeat the analysis.
 The rebase rewrote history, so a force push is needed:
 
 ```bash
-git push --force-with-lease origin <branch>
+git push --force-with-lease --force-if-includes origin <branch>
 ```
 
-If this fails (someone else pushed to the same branch), warn the user and explain the situation. Only use `--force` with explicit confirmation.
+If the lease is rejected (someone else pushed to the same branch), do not force: `git fetch`, inspect what changed remotely (`git log HEAD..origin/<branch>`), then re-sync (Step 1 onward) before pushing again.
 
 ### Step 7: Cleanup
 

@@ -4,6 +4,8 @@ Shared safety rules that apply to all git-superpowers skills.
 
 The most dangerous patterns (`git add .`, bare `--force`, `--no-verify`, force-pushing protected branches) are also blocked deterministically by the plugin's PreToolUse hook (`hooks/git-guard.sh`) — these rules explain the *why* and cover what a regex can't judge.
 
+Repeated snippets (base-branch detection, commit heredoc, preflight checks, overlap, verification) live in `references/common-snippets.md`.
+
 ## Adaptive Output
 
 Adjust your verbosity and explanation depth to the user's apparent experience level:

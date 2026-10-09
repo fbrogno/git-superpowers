@@ -1,105 +1,53 @@
 ---
 name: ci-fix
-description: Diagnose and fix failing CI checks — fetch failing run logs via gh, find the root cause, fix, push, re-watch. Triggers: "CI is red", "checks failing", "pipeline kaputt", "warum failed der build", "fix the build", "tests laufen nicht durch", /ci-fix.
+description: Use when CI checks or a pipeline are failing and need diagnosing — "CI is red", "checks failing", "Pipeline kaputt", "warum failed der Build", "fix the build", "Tests laufen in CI nicht durch", "GitHub Action schlägt fehl". Not for opening a PR (pr-prep) or reviewing code (diff-review).
 ---
 
 # CI Fix
 
-A PR with red checks doesn't get reviewed. This skill pulls the failing logs, isolates the actual error (not the 400 lines of noise around it), fixes the cause, and pushes — then watches the checks go green.
+Pull the failing logs, isolate the real error, fix the cause, push, and confirm the checks go green.
 
-## Safety (always apply)
-- Fix the cause, never the symptom — deleting a failing test or adding `--no-verify` is not a fix
-- Never push a "fix attempt" without running the failing check locally first, when it can run locally
-- Cleanup commits, never `--amend` on pushed history
-- Adapt verbosity to the user (see Adaptive Output in `references/git-safety.md`)
+## Safety
+- Fix the cause, never the symptom: no deleted tests, `as any`, `@ts-ignore`, `--no-verify`, file-wide lint disables
+- Reproduce locally before pushing a fix when the step can run locally
+- Cleanup commits only, never `--amend` pushed history (`references/common-snippets.md#standard-safety-lines`)
+- "CI is green" / "fixed" is only true with fresh `gh pr checks` output from this turn (`references/common-snippets.md#verification`; with superpowers installed: `superpowers:verification-before-completion`)
 
 ## Workflow
 
-### Step 1: What's Failing?
-
+### 1. What's failing?
 ```bash
 gh auth status >/dev/null 2>&1 || echo "gh unavailable"
 gh pr checks 2>/dev/null || gh run list --branch "$(git branch --show-current)" --limit 5
 ```
+Show a compact status per check. All green: say so and stop.
 
-No PR yet → use the run list for the branch. Show a compact status:
-
-```
-Checks for #142:
-  ✓ lint            (32s)
-  ✗ test            (2m 11s)  ← failing
-  ✗ build           (1m 40s)  ← failing
-  ○ deploy-preview  (skipped)
-```
-
-If everything is green: say so, done.
-
-### Step 2: Get the Failure — Not the Whole Log
-
-CI logs are huge; never dump a full log into the conversation. Fetch only the failed steps:
-
+### 2. Get the failure, not the whole log
+Never dump a full log.
 ```bash
 RUN_ID=$(gh run list --branch "$(git branch --show-current)" --status failure --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run view "$RUN_ID" --log-failed 2>/dev/null | tail -150
 ```
+Grep further if noisy (`error|Error|FAIL|AssertionError|Traceback|npm ERR`). Identify the failed step and the FIRST error (later ones cascade). Flaky (timeouts, network, unrelated change)? `gh run rerun "$RUN_ID" --failed` is legitimate only for flakes; say which case this is and why.
 
-If `--log-failed` output is still noisy, grep it for the first real error before reading further (`error|Error|FAIL|✗|AssertionError|Traceback|npm ERR`). Identify:
+### 3. Reproduce locally
+Read the exact command from `.github/workflows/*.yml` (`grep -A3 -B1 '<step>' .github/workflows/*.yml`) and run it. CI-only failure: compare runtime versions, env vars, OS, and say the loop must go through CI.
 
-- **Which step failed** (test? build? lint? typecheck?)
-- **The first error** — later errors are usually cascade noise
-- **Deterministic or flaky?** If the log shows timeouts/network errors and the code change is unrelated, check whether a re-run passes before touching code:
-  ```bash
-  gh run rerun "$RUN_ID" --failed
-  ```
-  A re-run is legitimate for flakes, never for real failures — say which one this is and why.
-
-### Step 3: Reproduce Locally (when possible)
-
-Map the failing CI step to its local command — read `.github/workflows/*.yml` for the exact command the step runs (npm test, pytest, tsc, eslint, …):
-
-```bash
-grep -A3 -B1 '<failing-step-name>' .github/workflows/*.yml
-```
-
-Run that command locally. Local reproduction confirms the diagnosis and makes the fix verifiable without burning CI cycles. If it only fails in CI (env-dependent): compare versions (`node --version` vs. the workflow's matrix), env vars, OS differences — and say clearly that the loop has to go through CI.
-
-### Step 4: Fix the Cause
-
-Standard debugging discipline: understand why it fails before editing. Typical cases and their honest fixes:
+### 4. Fix the cause
 
 | Failure | Real fix | Not a fix |
 |---|---|---|
-| Test fails after your change | Your code broke the contract — fix code, or fix test if the contract legitimately changed | Deleting/skipping the test |
-| Type error | Fix the type or the code | `as any`, `@ts-ignore` |
-| Lint error | Fix the code | Disabling the rule file-wide |
-| Snapshot mismatch | Verify new output is CORRECT, then update snapshot | Blind `--update-snapshots` |
-| Flaky timeout | Re-run; if recurring, fix the race/timeout | Raising the timeout to 5 minutes |
+| Test fails after your change | Fix the code, or the test if the contract legitimately changed | Delete/skip the test |
+| Type error | Fix type or code | `as any`, `@ts-ignore` |
+| Snapshot mismatch | Verify new output is correct, then update | Blind `--update-snapshots` |
+| Flaky timeout | Fix the race; re-run once | Timeout of 5 minutes |
 
-Verify locally (the Step 3 command passes), then commit and push:
+Verify locally, then commit per `references/common-snippets.md#commit-template` (`fix(ci): <what was wrong>`) and `git push origin <branch>`.
 
-```bash
-git add <specific-files>
-git commit -m "$(cat <<'EOF'
-fix(ci): <what was actually wrong>
-
-<attribution trailer, if your harness or the user's instructions specify one>
-EOF
-)"
-git push origin <branch>
-```
-
-### Step 5: Watch It Go Green
-
-```bash
-gh pr checks --watch 2>/dev/null || gh run watch
-```
-
-Green → confirm: "All checks passing ✓". Still red → back to Step 2 with the new log; after two failed fix attempts, stop and summarize what's known instead of push-guessing.
+### 5. Watch
+`gh pr checks --watch 2>/dev/null || gh run watch`. Green: report from that output. Red: back to step 2; after two failed attempts stop and summarize what is known instead of push-guessing.
 
 ## Rules
-
-- One fix attempt = one focused commit — no "try things" commit chains
-- Read `--log-failed`, never full logs; find the FIRST error
-- Distinguish flaky from broken explicitly, and say which one it is
-- A fix that only makes CI silent (skip, ignore, any-cast) gets flagged as such, not sold as a fix
-- After two failed attempts: stop, summarize findings, involve the user
+- One focused commit per fix attempt
+- Find the FIRST error; `--log-failed`, not full logs
+- Name flaky vs broken explicitly; flag silencing as silencing

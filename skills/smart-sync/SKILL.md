@@ -1,217 +1,54 @@
 ---
 name: smart-sync
-description: Rebase onto main with topic-aware conflict resolution. Triggers: sync, rebase, pull from main, "neusten Stand ziehen", "branch aktualisieren", "merge conflicts lösen", /smart-sync.
+description: Use when the user wants their branch brought up to date with the default branch by rebase — "sync", "rebase onto main", "pull from main", "neusten Stand ziehen", "branch aktualisieren" — or when a rebase or merge is stopped on conflicts ("merge conflicts lösen", "rebase conflict"). Not for pushing (safe-push) or just predicting conflicts (conflict-simulator).
 ---
 
 # Smart Sync
 
-Rebase your branch onto main with topic-aware conflict resolution. Instead of presenting conflicts as raw file diffs, this skill groups them by topic and guides you through resolution with clear explanations of what each side changed and why.
+Rebase the branch onto the default branch and resolve conflicts by topic instead of raw file diffs.
 
-## Safety (always apply)
-- Never `git merge` — always `git rebase`
-- Never `--force` — use `--force-with-lease`
-- During rebase: `--ours` = main, `--theirs` = your branch (inverted!)
-- Confirm before destructive operations; check for detached HEAD/missing remote first
+## Iron Law
+
+```
+NEVER FORCE-PUSH A SHARED OR PROTECTED BRANCH, AND NEVER WITHOUT --force-with-lease --force-if-includes
+```
+
+A rebase rewrites history. Check who else works on the branch, keep a way back (`git reflog`, `ORIG_HEAD`), and confirm before pushing.
+
+## Red Flags
+
+| Thought | Reality |
+|---|---|
+| "I'll just force-push quickly" | Lease+includes or nothing. Rejected lease = someone pushed; fetch and look. |
+| "It's only my branch" | `git log origin/<branch> --format=%ae \| sort -u` — more than one author = shared. |
+| "The PR already has reviews, a rebase is harmless" | It invalidates review context and re-runs CI. Ask first. |
+| "Too many conflicts, I'll take `--ours` for everything" | During rebase `--ours` = main, `--theirs` = your commits. Wrong guess silently drops work. |
+| "git-guard would block a bad force-push" | It blocks bare `--force`, not a lease on a branch teammates use. |
 
 ## Workflow
 
-### Step 1: Preflight
+Preflight per `references/common-snippets.md#preflight`; detect `$BASE` per `#base-branch`. Never `git rebase -i` (needs stdin).
 
-Check for uncommitted changes and stash them:
+1. **Stash dirty tree**: `git status --porcelain`; if dirty `git stash push -u -m "smart-sync: auto-stash $(date +%Y-%m-%d-%H%M)"` and tell the user.
+2. **Analyze incoming**: `git log --oneline HEAD..origin/$BASE`. Empty: "Already up to date", pop stash, stop. Otherwise show commits, `git diff --stat HEAD...origin/$BASE` and the overlap (`#overlap`); overlap means conflicts are likely (`/conflict-simulator` previews them).
+3. **Merge commits on the branch?** `git log --merges origin/$BASE..HEAD --oneline`. If any: offer `--rebase-merges` (keeps structure), standard rebase (flattens, may re-conflict) or abort.
+4. **Rebase**: `git rebase origin/$BASE`. Clean: go to step 7.
+5. **Analyze conflicts** (`git diff --name-only --diff-filter=U`), read `references/conflict-resolution.md`; for >3 files spawn `git-superpowers:conflict-resolver`. Group by topic, per group state what each side changed and a recommendation. More than 5 files: suggest aborting and syncing more often.
+6. **Resolve** per topic: keep mine `git checkout --theirs <f>`, take main `git checkout --ours <f>` (inverted during rebase!), combine (edit, remove markers), or show the conflict. Mixed files hunk by hunk. Then `git add <f>` and `git rebase --continue`; repeat for later commits. Offer `git rebase --abort` at any point. If `git rerere status` lists files, ask the user to verify the auto-resolutions.
+7. **Push** (history was rewritten): confirm, then `git push --force-with-lease --force-if-includes origin <branch>`. Protected or shared branch: stop (see `references/git-safety.md`). Lease rejected: `git fetch`, inspect `git log HEAD..origin/<branch>`, re-sync; do not force.
+8. **Cleanup**: `git stash pop` if stashed. Verify with fresh output: `git log --oneline <branch>..origin/$BASE` must be empty and `git status -sb` clean. Summarize (commits applied, conflicts resolved) and suggest `/smart-commit`, `/safe-push`.
 
-```bash
-git status --porcelain
-```
+## Conflicts in an in-progress merge
 
-If there are changes:
-```bash
-git stash push -u -m "smart-sync: auto-stash before rebase $(date +%Y-%m-%d-%H%M)"
-```
+If a `git merge` is already stopped on conflicts (`git status` says "You have unmerged paths", `.git/MERGE_HEAD` exists), resolve it here instead of rebasing: do not start a rebase or abort silently.
 
-Tell the user: "Stashed your uncommitted changes — they'll be restored after sync."
-
-### Step 2: Fetch and Analyze
-
-```bash
-git fetch origin
-```
-
-Detect the main branch:
-```bash
-git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
-```
-Fallback: check `origin/main`, then `origin/master`.
-
-Check what's coming in:
-```bash
-git log --oneline HEAD..origin/main
-```
-
-If empty: "Your branch is already up to date with main." Pop stash if exists, stop.
-
-Show the user:
-```
-12 new commits from main:
-
-a1b2c3d feat: new API structure for orders
-d4e5f6g fix: auth token refresh
-...
-
-These files will be affected:
-```
-```bash
-git diff --stat HEAD...origin/main
-```
-
-Warn about potential conflicts — check if any affected files also have local changes:
-```bash
-comm -12 \
-  <(git diff --name-only HEAD...origin/main | sort) \
-  <(git diff --name-only $(git merge-base HEAD origin/main)..HEAD | sort)
-```
-
-If there's overlap, warn: "These files were changed in both main and your branch — conflicts are likely: ..."
-
-**Tip:** Run `/conflict-simulator` first to preview conflicts without starting the rebase.
-
-### Step 2.5: Check for Merge Commits
-
-Before rebasing, check if the branch contains merge commits — these cause problems during rebase:
-
-```bash
-git log --merges origin/main..HEAD --oneline
-```
-
-If merge commits exist, warn:
-```
-⚠️ Your branch contains merge commits. A standard rebase will flatten
-these into individual commits, which can cause repeated conflicts.
-
-Options:
-[1] Rebase with --rebase-merges (preserves merge structure)
-[2] Standard rebase (flattens merges — simpler but may cause more conflicts)
-[3] Abort — I'll clean up the branch first
-```
-
-If option 1: use `git rebase --rebase-merges origin/main`
-
-### Step 3: Rebase
-
-```bash
-git rebase origin/main
-```
-
-If it succeeds without conflicts → skip to Step 6.
-
-### Step 4: Conflict Analysis
-
-When conflicts occur, analyze them by topic. For complex conflicts (>3 files), spawn the `git-superpowers:conflict-resolver` agent with the repo path and list of conflicted files. For simpler cases, resolve inline.
-
-Read `references/conflict-resolution.md` for the full strategy.
-
-```bash
-git diff --name-only --diff-filter=U
-```
-
-For each conflicted file, read it and analyze the conflict markers. Group conflicts by topic:
-
-```
-Merge Conflicts detected:
-
-[Login Bugfix] 1 conflict
-  → src/auth/login.tsx
-    Your side: redirect fix after login
-    Main's side: auth module refactoring
-    Recommendation: both changes are independent — combine them
-
-[Amazon Feature] 2 conflicts
-  → src/utils/api.ts
-    Your side: new Amazon API imports
-    Main's side: API module restructured to new pattern
-    Recommendation: adapt your imports to main's new structure
-
-  → src/routes.tsx
-    Your side: new /amazon route
-    Main's side: routes moved to new router format
-    Recommendation: add your route using main's new format
-
-[Mixed] 1 conflict
-  → src/config.ts
-    Contains changes for BOTH Login Bugfix and Amazon Feature
-    → Will resolve hunk by hunk
-```
-
-### Step 5: Resolve
-
-For each topic group, ask the user:
-
-**Simple conflicts:**
-- **"Keep your version"** → `git checkout --theirs <file> && git add <file>`
-  (Yes, `--theirs` — during rebase, YOUR changes are "theirs" because they're being replayed)
-- **"Take main's version"** → `git checkout --ours <file> && git add <file>`
-- **"Combine both"** → Claude edits the file to merge both changes, removes conflict markers, `git add <file>`
-- **"Show me the conflict"** → display the conflicted section with context and let the user decide
-
-**Mixed conflicts:**
-Show each conflict hunk with its topic label. Ask per hunk what to do.
-
-After resolving all files in this rebase step:
-```bash
-git rebase --continue
-```
-
-If new conflicts appear (next commit), repeat the analysis.
-
-**Escape hatch:** At any point, offer `git rebase --abort` to undo everything.
-
-**Overwhelm detection:** If there are more than 5 conflicted files, proactively suggest: "This is a complex rebase with many conflicts. Would you rather abort and sync more frequently to avoid this in the future?"
-
-**rerere:** If `git rerere` is enabled (`git config rerere.enabled`), git may have auto-resolved some conflicts using previously recorded resolutions. Check `git rerere status` — if files appear there, show the user: "git rerere auto-resolved these files based on your previous conflict resolutions. Please verify they look correct before continuing." If rerere is NOT enabled and the user just resolved conflicts manually, suggest: "Tip: Enable `git rerere` (`git config --global rerere.enabled true`) to automatically remember these resolutions for next time."
-
-### Step 6: Push
-
-The rebase rewrote history, so a force push is needed:
-
-```bash
-git push --force-with-lease --force-if-includes origin <branch>
-```
-
-If the lease is rejected (someone else pushed to the same branch), do not force: `git fetch`, inspect what changed remotely (`git log HEAD..origin/<branch>`), then re-sync (Step 1 onward) before pushing again.
-
-### Step 7: Cleanup
-
-Pop the stash if one was created:
-```bash
-git stash list
-```
-If the auto-stash is there:
-```bash
-git stash pop
-```
-
-Verify sync:
-```bash
-git log --oneline <branch>..origin/main
-```
-Should be empty (Behind: 0).
-
-Show summary and suggest next steps:
-
-```
-Branch synced. 12 commits from main applied. 3 conflicts resolved. Behind main: 0.
-
-What's next?
-[c] Run /smart-commit if you have uncommitted changes
-[p] Run /safe-push to push your branch
-[o] Run /repo-overview to check other repos
-[d] Done
-```
+- Same topic grouping and per-group choices as step 5/6, but in a merge `--ours` = your branch and `--theirs` = the incoming branch (not inverted).
+- Finish with `git add <files>` then `git commit` (default merge message; no `--no-edit` surprises, show it) — not `rebase --continue`.
+- Escape hatch: `git merge --abort`. No force-push is needed afterwards (history was not rewritten); use `/safe-push`.
 
 ## Rules
 
-- Never use `git merge` — always `git rebase`
-- Never use `--force` — always `--force-with-lease` (unless user explicitly confirms)
-- Never use `git rebase -i` (interactive mode requires stdin)
-- Always communicate that during rebase, `--ours` = main and `--theirs` = your branch
-- Always verify Behind: 0 after push
-- Always pop stash after completion
+- Rebase is the default; merge only when the user asks or a merge is already in progress
+- Never bare `--force`; never force a protected or shared branch
+- `--ours`/`--theirs` are inverted during rebase: say so when explaining
+- Always restore the stash and verify Behind: 0 from fresh output

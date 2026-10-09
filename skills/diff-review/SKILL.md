@@ -1,164 +1,68 @@
 ---
 name: diff-review
-description: Senior-dev code review of your diff — finds bugs, security issues, async mistakes, not style. Triggers: "review my changes", "check my code", "schau dir meine änderungen an", "code review", /diff-review.
+description: Use when the user wants their own changes checked for bugs before committing or pushing — "review my changes", "check my code", "schau dir meine Änderungen an", "review before commit", "kurz drüberschauen bevor ich pushe". Reviews your uncommitted or branch diff; for someone else's pull request by number or URL use pr-review.
 ---
 
 # Diff Review
 
-Review your changes for real problems before they become commits. This skill reasons about logic, security, async correctness, and consistency — not whitespace and style. Fewer findings that actually matter, not 20 nitpicks.
+Review your changes for real problems before they become commits: logic, security, async correctness. Few findings that matter, not 20 nitpicks.
 
-## Safety (always apply)
-- Never create a commit in this skill — the user commits when ready
-- Only flag real correctness/security/reliability issues, not style preferences
-- Apply fixes directly to files, don't just describe them
+## Safety
+- Never commit in this skill; the user commits when ready
+- Flag correctness, security and reliability only, no style preferences, nothing a compiler or ESLint already reports
+- Apply fixes directly to files instead of only describing them
 
-For large diffs (>500 lines), spawn the `git-superpowers:code-reviewer` agent with the diff output. This keeps the main conversation clean while the review runs.
+For diffs over 500 lines spawn the `git-superpowers:code-reviewer` agent with the diff to keep the conversation clean.
 
 ## Workflow
 
-### Step 1: Preflight
+### 1. Scope
+`git status`; no changes: say so and stop. Staged files present: ask staged, unstaged or both (default: staged if any, else unstaged). Branch review (nothing uncommitted): use `git diff origin/<base>..HEAD` with `<base>` per `references/common-snippets.md#base-branch`. Show `git diff --stat`; if >500 lines ask whether to review all or specific files.
 
-```bash
-git status
-```
+### 2. Read
+`git diff` / `git diff --cached`. For each file understand its role (path, imports), the intent of the change, and the unchanged lines around it.
 
-Check you're in a git repo with actual changes. If there are no changes at all, say so and stop.
-
-Determine what to review:
-- If files are staged (`git diff --cached --stat` shows output): ask "Review staged changes, unstaged changes, or both?"
-- Default: staged changes if any exist, otherwise all unstaged changes.
-
-### Step 2: Overview
-
-Get the scope without reading full diffs yet:
-
-```bash
-git diff --stat                  # unstaged
-git diff --cached --stat         # staged
-```
-
-Show a summary: "You have 4 files changed, 128 insertions, 22 deletions."
-
-If the diff is very large (>500 lines), say so and ask: "This is a large diff. Review all files or specific ones?"
-
-### Step 3: Read the Changes
-
-Read the actual diff:
-
-```bash
-git diff                         # unstaged changes
-# or
-git diff --cached                # staged changes
-# or both, separated
-```
-
-For each file in the diff, understand:
-- What this file does in the codebase (from its path and imports)
-- What changed — not just the lines, but the intent
-- The context around the changes (the unchanged lines surrounding them)
-
-### Step 4: Review Each File
-
-For each changed file, reason through these categories. Only flag something if there is a genuine issue — not a hypothetical.
+### 3. Review each file
+Flag only genuine issues, not hypotheticals.
 
 <!-- sync:review-categories — keep this category list identical to agents/code-reviewer.md -->
 
 **Logic errors and bugs**
-- Control flow that can't work as written
-- Off-by-one errors in loops or array access
-- Conditions that are always true or always false
-- Wrong operator (assignment instead of comparison, etc.)
+- Control flow that can't work as written, off-by-one errors
+- Conditions always true or false, wrong operator
 
 **Missing error handling at system boundaries**
-- `fetch` / `axios` calls without catch
-- File system operations without error checks
-- Database queries without null handling on the result
-- JSON.parse without try/catch on external data
+- `fetch` / `axios` without catch, file system operations without error checks
+- Database results without null handling, `JSON.parse` on external data without try/catch
 
 **Security issues**
-- SQL injection: string concatenation into queries instead of parameterized queries
-- XSS: user input rendered as HTML without sanitization
-- Secrets or credentials hardcoded in the diff
-- Insecure direct object references (using user-provided IDs without authorization check)
+- SQL injection via string concatenation, XSS from unsanitized HTML
+- Hardcoded secrets or credentials
+- User-provided IDs used without an authorization check
 
 **Dead code and unused imports being added**
-- New imports that are never used in the added code
-- Functions defined but never called in the same diff
-- Variables assigned but never read
+- New imports never used, functions never called, variables never read
 
 **Async and race conditions**
-- Missing `await` on a Promise
-- State mutation in async callbacks that may run out of order
-- `Promise.all` missing where parallel calls are independent and sequential is unnecessary
+- Missing `await`, out-of-order state mutation in callbacks
+- Sequential awaits where independent calls should run in parallel
 
 **Null and undefined safety**
-- Chaining `.property` on values that could be null/undefined from external data
-- Array access without bounds check on data from APIs or user input
-- Optional values used as required without a guard
+- Property chains on possibly null external data
+- Array access without bounds check on API or user data
 
 **Hardcoded values that belong in config**
-- URLs, ports, or hostnames written as string literals
-- Magic numbers with no explanation
-- Environment-specific values (dev/staging/prod) baked into code
+- URLs, ports, hostnames as literals, unexplained magic numbers
+- Environment-specific values baked into code
 
 **Consistency with surrounding code**
-- Only flag this if the inconsistency would cause a real bug or is very jarring (e.g., a file uses async/await everywhere and new code uses raw `.then()` in a way that breaks the pattern)
+- Only when the inconsistency would cause a real bug or is jarring
 
-### Step 5: Present Findings
+### 4. Present findings
+Group by severity (🔴 CRITICAL, 🟡 WARNING, 🟢 SUGGESTION; only severities that occur). Each finding: number, `file:line`, the actual code, what is wrong and why, a concrete fix. End with counts. No issues: say so confidently ("No significant issues found. Ready to commit.").
 
-Group findings by severity. Only include severities that have at least one finding.
+### 5. Fix and verify
+Ask which to fix (numbers, all, skip). Read the file, apply, show the changed lines. Show the updated diff and flag any new problem a fix introduced.
 
-Format findings grouped by severity: 🔴 CRITICAL → 🟡 WARNING → 🟢 SUGGESTION. Each finding must include: numbered ID, file:line, the actual code, what is wrong and why, and a concrete fix. End with a count summary.
-
-If no issues: say so confidently — "No significant issues found. Ready to commit." is a valid and useful result.
-
-### Step 6: Fix Selected Issues
-
-If there are findings, ask the user which issues to fix (they can pick multiple):
-
-```
-Which issues should I fix?
-[ ] [1] Missing JSON.parse error handling (CRITICAL)
-[ ] [2] Missing await in useProducts (WARNING)
-[ ] [3] XSS via dangerouslySetInnerHTML (WARNING)
-[ ] [4] Unused import (SUGGESTION)
-[ ] Fix all
-[ ] Skip — I'll handle these myself
-```
-
-For each selected issue:
-- Read the file
-- Apply the fix (add try/catch, add await, replace with safe alternative, remove import, etc.)
-- Show the changed lines after fixing
-
-### Step 7: Verify
-
-After applying fixes, show the updated diff for confirmation:
-
-```bash
-git diff                   # or git diff --cached
-```
-
-"Here's the updated diff after fixes. Does this look right?"
-
-If more issues are visible in the updated diff that weren't there before (fixes introducing new problems), flag them.
-
-## Rules
-
-- Do not flag style preferences — only real correctness, security, and reliability issues
-- Do not repeat what ESLint or TypeScript would already catch as a compile error
-- A finding must include: file and line, the actual code, what is wrong and why, and a concrete fix
-- Never create a commit in this skill — the user commits when they are ready
-- If the diff has no real issues, say so confidently — "no issues found" is a valid and useful outcome
-- Apply fixes directly to files — do not just describe them
-
-## Next Steps
-
-After the review is complete (issues fixed or none found), offer:
-
-```
-Review complete. What's next?
-[c] Run /smart-commit to commit these changes
-[p] Run /safe-push to push (if already committed)
-[n] Nothing — I'll continue working
-```
+### 6. Next
+Offer `/smart-commit`, `/safe-push` (if already committed), or nothing.

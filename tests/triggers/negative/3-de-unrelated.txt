@@ -1,0 +1,1 @@
+schreib mir eine Python-Funktion, die eine Liste sortiert
